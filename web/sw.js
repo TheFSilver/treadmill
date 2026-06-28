@@ -1,10 +1,10 @@
 // sw.js — offline shell + Web Push handler. Module service worker (imports push-format).
 import { notificationFromPush } from './push-format.js';
 
-const CACHE = 'treadmill-v2';
+const CACHE = 'treadmill-v3';
 const ASSETS = [
   './', './index.html', './app.js', './ui.js', './ftms-ble.js', './ftms-core.js',
-  './incline.js', './session.js', './simulator.js', './web-ble.js', './h10-core.js',
+  './incline.js', './session.js', './workouts.js', './simulator.js', './web-ble.js', './h10-core.js',
   './dropdown.js', './notify.js', './streak.js', './trend.js',
   './push-format.js', './push-client.js',
   './manifest.json', './icon.svg',

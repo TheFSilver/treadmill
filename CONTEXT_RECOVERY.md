@@ -6,27 +6,29 @@ FitShow ni abonnement**. Bat les features premium FitShow + l'inclinaison qu'il 
 Stack identique à `resonance`/`fittrack`. **13 fichiers de tests comportementaux verts.**
 Repo privé `github.com/TheFSilver/treadmill`.
 
-## ✅ Fait
-- `ftms-core.js` — parse Treadmill Data `0x2ACD` + commandes Control Point `0x2AD9`. Testé.
-- `incline.js` — **l'edge** : calories ACSM (pente + poids), grade-adjusted pace/distance, METs.
-- `session.js` — cerveau : stats live, zones FC (synergie H10), programmes (fat burn/intervalles/desk).
+## ✅ Fait — vérifié sur le VRAI tapis (28/06) : km/h OK, start/stop/±/contrôle FTMS OK
+- `ftms-core.js` — parse Treadmill Data `0x2ACD` + Control Point `0x2AD9`. Testé.
+- `incline.js` — **l'edge** : calories ACSM (pente + poids), grade-adjusted, METs. Angles réels 1°/4° (manuel).
+- `session.js` — cerveau : stats live + **vitesse max, pas/cadence, vitesse moy**, zones FC (H10), programmes.
+- `workouts.js` — catalogue : built-ins (free/deskwalk/fatburn/intervalles/**Japanese Walking IWT**) + **séances custom** persistées (CRUD).
 - `ftms-ble.js` — adaptateur Web Bluetooth tapis (request control + start/stop/speed/incline).
-- `ui.js` — stats live, sélecteur d'inclinaison, dropdown programmes, contrôles contextuels, mode démo.
-- `simulator.js` — tapis FTMS synthétique (+ HR). Coquille PWA (index/app/sw module/manifest/icon).
-- **DRY** : `web-ble`, `h10-core`, `dropdown`, `streak`, `trend`, `notify`, `push-*` réutilisés de resonance.
-- Tests : ftms-core, incline, ftms-ble, session, boot/intégration (end-to-end + inclinaison +
-  contrôle programme + lecture-seule) + tous les modules partagés.
+- `ui.js` — **MACHINE À ÉTATS** idle→ready→active→summary : connexion ne lance PAS le chrono ;
+  Stop → **écran récap stats retenues** sans déconnecter ; vitesse **quick-sets 2/4/6/8 + fin ±0,1** ;
+  **historique** ; **créateur de séances**. L'inclinaison HM1 = mécanique (boutons = calcul seul, pas de commande belt).
+- `simulator.js` — tapis FTMS synthétique (+ HR). Coquille PWA premium (grille stats, barres de zones).
+- **DRY** : `web-ble`, `h10-core`, `dropdown` (gagne `setItems`), `streak`, `trend`, `notify`, `push-*` réutilisés/synchronisés avec resonance.
+- **14 fichiers de tests verts**, dont boot/intégration prouvant les 5 fixes (chrono, vitesse, rétention stats, Japanese, custom).
 
-## 📋 Prochaines étapes (au matériel)
-1. **Tester le vrai HM1** : connecter (Chrome Android, fermer FitShow). Vérifier que les trames
-   `0x2ACD` arrivent et qu'un **Start `0x2AD9`** est accepté (sinon lecture seule = stats OK quand même).
-   ⚠️ **Vérifier l'UNITÉ vitesse** : tapis à 5 mph (son écran) → l'app doit afficher **~8 km/h**.
-   Si ~5 → le module envoie du mph brut → ajouter flag conversion mph→km/h dans `ftms-core`.
-2. **Inclinaison calibrée depuis le manuel** : Position 1 ≈ **1°**, Position 2 ≈ **4°** (dans
-   `incline.js`, stockées en degrés, pente via tan). À reconfirmer sur le matériel ("about").
-3. **Synergie poids** : brancher le poids depuis fittrack (pour l'instant `loadPref('weightKg', 80)`).
-4. **Déployer** Cloudflare Pages (output `web`, HTTPS) → PWA Android.
-5. (Option) Web Push quotidien via le worker resonance (mutualisable) ; parcours virtuels ; export.
+## 📋 Prochaines étapes
+1. ✅ Vrai HM1 validé : **km/h correct**, **start/stop/±/contrôle FTMS `0x2AD9` OK** (28/06).
+2. **Calibrage fin inclinaison** : angles 1°/4° du manuel ("about") — affiner si besoin sur le matériel.
+3. **Synergie poids** : brancher le poids réel depuis fittrack (pour l'instant `loadPref('weightKg', 80)` —
+   idée : store partagé entre les 3 PWA, ou saisie manuelle dans un écran réglages).
+4. **Déployer** Cloudflare Pages (output `web`, HTTPS) → PWA Android, installer.
+5. **UI builder** : le créateur de séances expose `addCustomWorkout()` + un form minimal (nom + segments) ;
+   enrichir l'édition des segments (inputs minutes/vitesse par ligne) si besoin.
+6. (Option) Web Push quotidien via le worker resonance (mutualisable) ; parcours virtuels ; export CSV/Health ;
+   écran réglages (poids, FC max, calibrage angles) ; sparkline tendances dans l'historique.
 
 ## ⚙️ Commandes
 ```bash

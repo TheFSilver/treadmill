@@ -33,11 +33,20 @@ export function createDropdown(doc, { items = [], placeholder = '', onSelect = (
     if (!silent) onSelect(id);
   }
 
-  for (const it of items) {
-    buttons[it.id] = add('button', { className: 'item', textContent: it.label }, list);
-    buttons[it.id].addEventListener('click', () => setValue(it.id));
+  function buildItems(newItems) {
+    items = newItems;
+    for (const k in buttons) delete buttons[k];
+    if (list.replaceChildren) list.replaceChildren(); else if (list.children) list.children.length = 0;
+    for (const it of items) {
+      buttons[it.id] = add('button', { className: 'item', textContent: it.label }, list);
+      buttons[it.id].addEventListener('click', () => setValue(it.id));
+    }
   }
+  buildItems(items);
   button.addEventListener('click', toggle);
 
-  return { el, button, list, buttons, open, close, toggle, select: (id) => setValue(id), setValue, get value() { return value; } };
+  // Rebuild the list (e.g. after a custom item is added), keeping the current selection label.
+  function setItems(newItems) { const cur = value; buildItems(newItems); value = null; setValue(cur, { silent: true }); }
+
+  return { el, button, list, buttons, open, close, toggle, select: (id) => setValue(id), setValue, setItems, get value() { return value; } };
 }

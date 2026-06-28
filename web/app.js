@@ -1,18 +1,15 @@
 // app.js — browser entry point. Plugs the real adapters (Web Bluetooth treadmill + optional
-// H10 for HR, Web Audio not needed here) into the UI. Logic lives in the tested modules.
-// Synergies: H10 heart rate (resonance stack) + body weight from fittrack → real calories.
+// H10 for HR) into the UI, and wires the shared habit/history layer. Synergies: H10 heart
+// rate (resonance stack) + body weight (fittrack) → real, incline-aware calories.
 
 import { mount } from './ui.js';
 import { TreadmillConnection } from './ftms-ble.js';
-import { H10Connection } from './web-ble.js';            // reused from resonance (HR synergy)
+import { H10Connection } from './web-ble.js';
 import { WorkoutSession } from './session.js';
 import { makeTreadmillSimulator } from './simulator.js';
 import { createNotifier } from './notify.js';
-import { recordSession, loadStreak, streakText, loadPref, savePref } from './streak.js';
-
-// Body weight from fittrack (manual until a shared store is wired). Update to your value.
-const WEIGHT_KG = loadPref('weightKg', 80);
-const MAX_HR = loadPref('maxHr', 190);
+import { recordSession, loadStreak, streakText, loadSessions, loadPref, savePref } from './streak.js';
+import { summary as summarizeHistory } from './trend.js';
 
 const notifier = createNotifier();
 
@@ -22,14 +19,16 @@ const app = mount(document, {
   makeSession: (o) => new WorkoutSession(o),
   makeSimulator: makeTreadmillSimulator,
   notifier,
-  weightKg: WEIGHT_KG,
-  maxHr: MAX_HR,
+  weightKg: loadPref('weightKg', 80),       // from fittrack (manual for now)
+  maxHr: loadPref('maxHr', 190),
   defaultProgramId: loadPref('program', 'free'),
   defaultPositionId: loadPref('position', 1),
+  loadHistory: () => loadSessions().filter((s) => s.activity === 'treadmill'),
+  summarizeHistory,
 });
 
 app.onProgram = (id) => savePref('program', id);
-app.setPosition = ((orig) => (id) => { savePref('position', id); return orig(id); })(app.setPosition);
+app.onPosition = (id) => savePref('position', id);
 
 // Shared habit layer: every modality (weigh, breathe, walk) feeds ONE streak (compound).
 app.setStreak(streakText(loadStreak()));

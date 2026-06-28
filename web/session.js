@@ -34,18 +34,20 @@ export function programDurationSec(program) {
 }
 
 export class WorkoutSession {
-  constructor({ weightKg = 75, positionId = 1, positions, maxHr = 190, program = null } = {}) {
+  constructor({ weightKg = 75, positionId = 1, positions, maxHr = 190, program = null, strideM = 0.71 } = {}) {
     this.weightKg = weightKg;
     this.positionId = positionId;
     this.positions = positions;
     this.maxHr = maxHr;
     this.program = program;
+    this.strideM = strideM;
     this.reset();
   }
 
   reset() {
-    this.elapsedSec = 0; this.calories = 0; this.distanceM = 0; this.gaDistanceM = 0;
-    this.lastSpeed = 0; this.peakHr = 0; this.hrSum = 0; this.hrCount = 0;
+    this.elapsedSec = 0; this.movingSec = 0; this.calories = 0; this.distanceM = 0; this.gaDistanceM = 0;
+    this.lastSpeed = 0; this.maxSpeed = 0; this.steps = 0;
+    this.peakHr = 0; this.hrSum = 0; this.hrCount = 0;
     this.zoneSeconds = [0, 0, 0, 0, 0, 0];
   }
 
@@ -57,11 +59,15 @@ export class WorkoutSession {
     const speed = data.speed != null ? data.speed : this.lastSpeed;
     this.lastSpeed = speed;
     this.elapsedSec += dtSec;
+    if (speed > 0) this.movingSec += dtSec;
+    if (speed > this.maxSpeed) this.maxSpeed = speed;
 
+    const deltaM = (speed * 1000 / 3600) * dtSec;
     // Distance: trust the treadmill's own total if present, else integrate speed.
     if (data.distance != null) this.distanceM = data.distance;
-    else this.distanceM += (speed * 1000 / 3600) * dtSec;
+    else this.distanceM += deltaM;
     this.gaDistanceM += (gradeAdjustedSpeed(speed, this.grade) * 1000 / 3600) * dtSec;
+    this.steps += deltaM / this.strideM; // step estimate from belt distance / stride length
 
     // Calories OUR way: grade + weight (ignore the treadmill's flat figure).
     this.calories += kcalPerMin(speed, this.grade, this.weightKg) * (dtSec / 60);
@@ -82,6 +88,8 @@ export class WorkoutSession {
       distanceM: this.distanceM,
       gaDistanceM: this.gaDistanceM,
       calories: this.calories,
+      steps: Math.round(this.steps),
+      maxSpeed: this.maxSpeed,
       mets: mets(speed, this.grade),
       hr: hr || null,
       zone: zoneForHr(hr, this.maxHr),
@@ -94,27 +102,19 @@ export class WorkoutSession {
   }
 
   summary() {
+    const moving = this.movingSec || this.elapsedSec;
     return {
       durationSec: this.elapsedSec,
+      movingSec: this.movingSec,
       distanceM: Math.round(this.distanceM),
       gaDistanceM: Math.round(this.gaDistanceM),
       calories: Math.round(this.calories),
+      steps: Math.round(this.steps),
+      maxSpeed: +this.maxSpeed.toFixed(1),
+      avgSpeed: moving ? +((this.distanceM / 1000) / (moving / 3600)).toFixed(1) : 0,
       avgHr: this.hrCount ? Math.round(this.hrSum / this.hrCount) : null,
       peakHr: this.peakHr || null,
       zoneSeconds: this.zoneSeconds,
     };
   }
 }
-
-// Built-in programs = FitShow's gated "plans", free. Speeds in km/h, durations in minutes.
-export const PROGRAMS = [
-  { id: 'free', name: 'Marche libre', segments: null },
-  { id: 'fatburn', name: 'Fat burn 30 min', segments: [
-    { minutes: 5, speed: 3.5 }, { minutes: 20, speed: 5 }, { minutes: 5, speed: 3 } ] },
-  { id: 'intervals', name: 'Intervalles 20 min', segments: [
-    { minutes: 3, speed: 3.5 },
-    ...Array.from({ length: 6 }, () => [{ minutes: 1, speed: 6 }, { minutes: 1, speed: 3.5 }]).flat(),
-    { minutes: 2, speed: 3 } ] },
-  { id: 'deskwalk', name: 'Desk walk 45 min', segments: [{ minutes: 45, speed: 3 }] },
-];
-export function getProgram(id) { return PROGRAMS.find((p) => p.id === id) || PROGRAMS[0]; }

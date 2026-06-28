@@ -2,9 +2,8 @@
 // body weight (not flat), grade-adjusted distance, HR zones from an H10, and a program that
 // steps through segments giving target speeds. These are the premium features, free.
 import assert from 'node:assert';
-import {
-  WorkoutSession, zoneForHr, maxHrFromAge, segmentAt, getProgram, PROGRAMS,
-} from './session.js';
+import { WorkoutSession, zoneForHr, maxHrFromAge, segmentAt } from './session.js';
+import { getWorkout, BUILTINS } from './workouts.js';
 
 let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
 
@@ -54,11 +53,22 @@ ok('zone + maxHr helpers correct');
   ok('program steps segments, exposes target speed, completes (custom workouts/plans, free)');
 }
 
-// segmentAt boundaries + registry.
+// segmentAt boundaries + workouts registry.
 assert.equal(segmentAt({ segments: [{ minutes: 1, speed: 3 }] }, 0).speed, 3);
 assert.ok(segmentAt({ segments: [{ minutes: 1, speed: 3 }] }, 120).done);
-assert.equal(getProgram('intervals').id, 'intervals');
-assert.equal(getProgram('zzz').id, PROGRAMS[0].id, 'unknown → free');
-ok('segment boundaries + program registry');
+assert.equal(getWorkout('intervals').id, 'intervals');
+assert.equal(getWorkout('zzz').id, BUILTINS[0].id, 'unknown → free');
+ok('segment boundaries + workouts registry');
+
+// New stats: max speed, steps, avg speed in the summary (the "stats hyper important" ask).
+{
+  const s = new WorkoutSession({ strideM: 0.7 });
+  for (let t = 0; t < 60; t++) s.update({ speed: t < 30 ? 6 : 3 }); // 30s @6 then 30s @3
+  const sum = s.summary();
+  assert.equal(sum.maxSpeed, 6, 'tracks max speed');
+  assert.ok(sum.steps > 0, 'estimates steps from distance/stride');
+  assert.ok(sum.avgSpeed > 3 && sum.avgSpeed < 6, `avg speed between, got ${sum.avgSpeed}`);
+  ok('summary exposes max speed, steps, avg speed');
+}
 
 console.log(`session: ${n} checks passed`);
