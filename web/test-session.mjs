@@ -3,7 +3,7 @@
 // steps through segments giving target speeds. These are the premium features, free.
 import assert from 'node:assert';
 import { WorkoutSession, zoneForHr, maxHrFromAge, segmentAt } from './session.js';
-import { getWorkout, BUILTINS } from './workouts.js';
+import { getWorkout, BUILTINS, ensureSeeded } from './workouts.js';
 
 let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
 
@@ -56,7 +56,7 @@ ok('zone + maxHr helpers correct');
 // segmentAt boundaries + workouts registry.
 assert.equal(segmentAt({ segments: [{ minutes: 1, speed: 3 }] }, 0).speed, 3);
 assert.ok(segmentAt({ segments: [{ minutes: 1, speed: 3 }] }, 120).done);
-assert.equal(getWorkout('intervals').id, 'intervals');
+{ const storage = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; })(); ensureSeeded({ storage }); assert.equal(getWorkout('intervals', { storage }).id, 'intervals'); }
 assert.equal(getWorkout('zzz').id, BUILTINS[0].id, 'unknown → free');
 ok('segment boundaries + workouts registry');
 

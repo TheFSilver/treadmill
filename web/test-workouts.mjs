@@ -2,19 +2,32 @@
 // workouts can be created, listed, fetched, persisted, and deleted — the FitShow premium
 // "design your own session" / "plans", free.
 import assert from 'node:assert';
-import { BUILTINS, allWorkouts, getWorkout, saveCustom, loadCustom, deleteCustom } from './workouts.js';
+import { BUILTINS, SEED_WORKOUTS, ensureSeeded, allWorkouts, getWorkout, saveCustom, loadCustom, deleteCustom } from './workouts.js';
 
 let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
 function fakeStorage() { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; }
 
-// Japanese Walking (IWT) is present and shaped right: 10 segments alternating brisk/slow, 30 min.
+// Japanese Walking (IWT) is shaped right: 10 segments alternating brisk/slow, 30 min.
 {
-  const jw = BUILTINS.find((w) => w.id === 'japanese');
-  assert.ok(jw, 'Japanese Walking present');
+  const jw = SEED_WORKOUTS.find((w) => w.id === 'japanese');
+  assert.ok(jw, 'Japanese Walking present in seeds');
   assert.equal(jw.segments.length, 10, '5×(brisk+slow) = 10 segments');
   assert.equal(jw.segments.reduce((s, x) => s + x.minutes, 0), 30, 'total 30 min');
   assert.ok(jw.segments[0].speed > jw.segments[1].speed, 'alternates brisk then slow');
   ok('Japanese Walking (IWT) is a real 30-min alternating protocol');
+}
+
+// Seeding: starter workouts become editable customs once; idempotent; Marche libre stays default.
+{
+  const storage = fakeStorage();
+  assert.deepEqual(BUILTINS.map((w) => w.id), ['free'], 'only Marche libre is a permanent default');
+  ensureSeeded({ storage });
+  let all = allWorkouts({ storage });
+  assert.ok(all.some((w) => w.id === 'japanese' && w.custom), 'Japanese seeded as an editable custom');
+  assert.equal(loadCustom({ storage }).length, SEED_WORKOUTS.length, 'all starters seeded');
+  ensureSeeded({ storage }); // again
+  assert.equal(loadCustom({ storage }).length, SEED_WORKOUTS.length, 'idempotent (no duplicates)');
+  ok('ensureSeeded seeds starters as editable customs, once');
 }
 
 // Custom workout: create → appears in allWorkouts + fetchable + persisted.

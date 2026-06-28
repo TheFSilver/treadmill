@@ -10,7 +10,7 @@
 
 import { parseTreadmillData } from './ftms-core.js';
 import { WorkoutSession } from './session.js';
-import { getWorkout, allWorkouts, saveCustom, loadCustom, deleteCustom } from './workouts.js';
+import { getWorkout, allWorkouts, saveCustom, loadCustom, deleteCustom, ensureSeeded } from './workouts.js';
 import { DEFAULT_POSITIONS } from './incline.js';
 import { createDropdown } from './dropdown.js';
 
@@ -33,6 +33,8 @@ export function mount(doc, deps) {
 
   // Mutable settings (editable in the Réglages screen, applied to the next workout).
   let curWeight = initWeight, curMaxHr = initMaxHr, curPositions = initPositions, curGoalKm = goalKm;
+
+  ensureSeeded({ storage }); // seed starter workouts as editable entries on first run
 
   const root = doc.getElementById('app');
   const add = (tag, props = {}, parent = root) => { const e = doc.createElement(tag); Object.assign(e, props); parent.appendChild(e); return e; };
@@ -361,20 +363,24 @@ export function mount(doc, deps) {
   function showWorkouts() {
     if (state !== 'workouts' && state !== 'builder') prevState = state;
     state = 'workouts';
-    const customs = loadCustom({ storage });
     if (els.workoutList.replaceChildren) els.workoutList.replaceChildren(); else if (els.workoutList.children) els.workoutList.children.length = 0;
-    if (!customs.length) add('div', { className: 'hrow', textContent: 'Aucune séance personnalisée.' }, els.workoutList);
-    for (const w of customs) {
+
+    // One unified list = the dropdown. "Marche libre" is the default (no actions); every other
+    // workout (the seeded starters + the user's own) is editable + deletable.
+    for (const w of allWorkouts({ storage })) {
       const row = add('div', { className: 'hrow' }, els.workoutList);
       const info = add('div', { className: 'hrow-info', style: { cursor: 'pointer' } }, row);
       add('span', { textContent: w.name }, info);
-      add('span', { textContent: `${(w.segments || []).length} seg · ${(w.segments || []).reduce((s, x) => s + (x.minutes || 0), 0)} min` }, info);
+      const segs = w.segments || [];
+      add('span', { textContent: segs.length ? `${segs.length} seg · ${segs.reduce((s, x) => s + (x.minutes || 0), 0)} min` : 'par défaut' }, info);
+      if (w.builtin) continue; // free walk = default, nothing to edit/delete
       info.addEventListener('click', () => startBuilder(w));
       const edit = add('button', { className: 'btn small ghost', textContent: '✎' }, row);
       edit.addEventListener('click', () => startBuilder(w));
       const del = add('button', { className: 'btn small ghost del', textContent: '🗑' }, row);
       del.addEventListener('click', () => { deleteCustom(w.id, { storage }); refreshDropdown(); showWorkouts(); });
     }
+    add('div', { className: 'hrow muted', textContent: 'Astuce : modifie ou supprime une séance, ou crée la tienne.' }, els.workoutList);
     render();
   }
 
@@ -434,10 +440,12 @@ export function mount(doc, deps) {
   let segRows = [];        // [{minEl, spdEl, kind}]
   let editingId = null;    // non-null when editing an existing workout
 
-  function startBuilder(workout) {
-    editingId = workout && workout.id ? workout.id : null;
-    els.builderTitle.textContent = editingId ? 'Modifier la séance' : 'Nouvelle séance';
-    els.builderName.value = workout ? workout.name : '';
+  // workout: the source to load (or null for blank). asCopy=true → duplicate a built-in into a
+  // new editable custom workout (no id, name suffixed "(copie)").
+  function startBuilder(workout, asCopy = false) {
+    editingId = workout && workout.id && !asCopy ? workout.id : null;
+    els.builderTitle.textContent = editingId ? 'Modifier la séance' : (asCopy ? 'Dupliquer la séance' : 'Nouvelle séance');
+    els.builderName.value = workout ? (asCopy ? `${workout.name} (copie)` : workout.name) : '';
     segDrafts = workout && workout.segments && workout.segments.length
       ? workout.segments.map((s) => ({ minutes: s.minutes, speed: s.speed, kind: s.kind || 'effort' }))
       : [{ minutes: 5, speed: 4, kind: 'effort' }];

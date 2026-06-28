@@ -104,7 +104,7 @@ const deps = (over = {}) => ({
   const w = api.addCustomWorkout({ name: 'Mon HIIT', segments: [{ minutes: 2, speed: 6 }, { minutes: 2, speed: 3 }] });
   assert.ok(api.els.dropdown.buttons[w.id], 'custom workout appears in the dropdown');
   assert.equal(api.programId, w.id, 'auto-selected after creation');
-  assert.equal(loadCustom({ storage }).length, 1, 'custom workout persisted');
+  assert.ok(loadCustom({ storage }).some((x) => x.id === w.id), 'custom workout persisted');
   ok('Japanese Walking selectable + custom workout created/listed/persisted');
 }
 
@@ -222,26 +222,40 @@ const deps = (over = {}) => ({
   inputs[2].value = '2'; inputs[3].value = '3';  // row2: 2 min @ 3
   api.els.saveWorkout.click();
   assert.equal(api.state, 'workouts', 'save returns to the workouts page');
-  const custom = loadCustom({ storage });
-  assert.equal(custom.length, 1);
-  assert.deepEqual(custom[0].segments, [
+  const mine = loadCustom({ storage }).find((w) => w.name === 'Mon parcours');
+  assert.ok(mine, 'workout persisted among the catalog');
+  assert.deepEqual(mine.segments, [
     { minutes: 4, speed: 6, kind: 'effort' },
     { minutes: 2, speed: 3, kind: 'recovery' },
   ], 'editable rows saved WITH effort/recovery kind');
-  // list shows the workout; edit loads it into the builder
-  const list = api.els.workoutList.children.filter((c) => c.className === 'hrow');
-  assert.equal(list.length, 1, 'workout listed on the page');
-  const editBtn = list[0].children.find((c) => c.textContent === '✎');
-  editBtn.click();
+  // the page lists workouts (seeded starters + the new one); find ours by name and edit it
+  const rowByName = (name) => api.els.workoutList.children.find((r) => r.className === 'hrow'
+    && (r.children.find((c) => c.className === 'hrow-info')?.children || []).some((s) => s.textContent === name));
+  const myRow = rowByName('Mon parcours');
+  assert.ok(myRow, 'my workout listed on the page');
+  myRow.children.find((c) => c.textContent === '✎').click();
   assert.equal(api.state, 'builder');
   assert.equal(api.els.builderName.value, 'Mon parcours', 'edit loads the workout');
   api.els.cancelWorkout.click();
   assert.equal(api.state, 'workouts', 'cancel returns to the list');
   // delete removes it
-  const delBtn = api.els.workoutList.children.filter((c) => c.className === 'hrow')[0].children.find((c) => c.className && c.className.includes('del'));
-  delBtn.click();
-  assert.equal(loadCustom({ storage }).length, 0, 'workout deleted from the page');
+  rowByName('Mon parcours').children.find((c) => c.className && c.className.includes('del')).click();
+  assert.ok(!loadCustom({ storage }).some((w) => w.name === 'Mon parcours'), 'workout deleted from the page');
   ok('workouts page: create (with recovery segment), list, edit, delete');
+}
+
+// 11c. Seeded starter workouts (Japanese Walking, Fat burn…) appear on the page AND are editable.
+{
+  const storage = fakeStorage();
+  const api = mount(fakeDoc(), deps({ storage }));
+  api.els.demoBtn.click(); api.els.manageBtn.click();
+  const labels = api.els.workoutList.children.flatMap((r) => r.children).flatMap((c) => c.children || []).map((c) => c.textContent);
+  assert.ok(labels.includes('Japanese Walking (IWT)'), 'seeded starters shown on the workouts page');
+  // they are real editable customs (have an edit button) — not read-only built-ins
+  const jwRow = api.els.workoutList.children.find((r) => r.className === 'hrow'
+    && (r.children.find((c) => c.className === 'hrow-info')?.children || []).some((s) => s.textContent === 'Japanese Walking (IWT)'));
+  assert.ok(jwRow.children.find((c) => c.textContent === '✎'), 'Japanese Walking is editable (seeded as custom)');
+  ok('seeded starters appear in the catalog and are editable like custom workouts');
 }
 
 // 11b. Incline is chosen at launch (fixed for the run) and RECORDED in the summary/stats.
