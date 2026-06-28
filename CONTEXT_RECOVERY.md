@@ -19,6 +19,11 @@ Repo privé `github.com/TheFSilver/treadmill`.
 - **DRY** : `web-ble`, `h10-core`, `dropdown` (gagne `setItems`), `streak`, `trend`, `notify`, `push-*` réutilisés/synchronisés avec resonance.
 - **14 fichiers de tests verts**, dont boot/intégration prouvant les 5 fixes (chrono, vitesse, rétention stats, Japanese, custom).
 
+## ✅ Restructure séances + inclinaison (28/06)
+- **Page dédiée "Mes séances"** (état `workouts`) : liste des séances custom, **créer / modifier / supprimer** (plus de builder inline sur l'accueil ; bouton "Gérer mes séances").
+- **Builder sur sa page** (état `builder`) : nom + segments éditables (minutes/vitesse) + **type de segment** effort/récup/échauffement (bouton cyclable, coloré), durée totale, Enregistrer/Annuler.
+- **Inclinaison = choisie au lancement** (manuelle/mécanique → fixée pour toute la séance, sélecteur sur `ready` uniquement, **read-only affichée en course**) et **enregistrée dans le récap + l'historique** (`session.summary.inclineDeg`).
+
 ## ✅ Premium (28/06, carte blanche)
 - **Écran Réglages** (`settings.js`) : poids (synergie fittrack), FC max, **2 angles d'inclinaison** calibrables, objectif quotidien. Persisté.
 - **Créateur de séances** : form éditable (lignes minutes/vitesse, ajout/suppression), persisté + dans le menu.

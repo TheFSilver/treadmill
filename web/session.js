@@ -82,7 +82,9 @@ export class WorkoutSession {
     const totalSec = programDurationSec(this.program);
     const segs = this.program && this.program.segments;
     const nextSpeed = segs && seg && !seg.done && segs[seg.index + 1] ? segs[seg.index + 1].speed : null;
+    const segmentKind = seg && !seg.done ? (seg.kind || 'effort') : null;
     return {
+      segmentKind,
       elapsedSec: this.elapsedSec,
       speed,
       gradeAdjustedSpeed: gradeAdjustedSpeed(speed, this.grade),
@@ -108,9 +110,13 @@ export class WorkoutSession {
 
   summary() {
     const moving = this.movingSec || this.elapsedSec;
+    const pos = (this.positions || []).find((p) => p.id === this.positionId);
     return {
       durationSec: this.elapsedSec,
       movingSec: this.movingSec,
+      positionId: this.positionId,
+      inclineDeg: pos && pos.degrees != null ? pos.degrees : null,
+      grade: +this.grade.toFixed(1),
       distanceM: Math.round(this.distanceM),
       gaDistanceM: Math.round(this.gaDistanceM),
       calories: Math.round(this.calories),

@@ -205,29 +205,56 @@ const deps = (over = {}) => ({
   ok('settings edit weight/maxHr/incline → applied + persisted, Back returns');
 }
 
-// 11. Custom workout builder form: editable minutes/speed rows → saved with the real values.
+// 11. Workouts PAGE: Gérer → Nouvelle séance → builder with editable rows + recovery kind →
+//     saved; then list shows it; edit loads it; delete removes it. (dedicated management page)
 {
   const storage = fakeStorage();
   const api = mount(fakeDoc(), deps({ storage }));
-  api.els.demoBtn.click(); // need 'ready' so builder can open (setup visible)
-  api.disconnect();         // back to idle; builder logic still works via toggle in ready
-  // open in a fresh ready: connect demo again
-  api.els.demoBtn.click();
-  api.els.newWorkoutBtn.click();              // toggle builder open → seeds 1 row
-  api.els.addSeg.click();                      // now 2 rows
+  api.els.demoBtn.click();                     // ready
+  api.els.manageBtn.click();                   // → workouts page
+  assert.equal(api.state, 'workouts');
+  api.els.newWorkoutBtn.click();               // → builder, seeds 1 effort row
+  assert.equal(api.state, 'builder');
+  api.els.addSeg.click();                      // 2 rows; new row defaults to 'recovery'
   api.els.builderName.value = 'Mon parcours';
-  // set editable values on the rendered rows (the form's inputs)
-  // segRows are not directly exposed; drive via the Save reading current input values:
-  // find the two input rows inside segList
   const inputs = api.els.segList.children.flatMap((row) => row.children.filter((c) => c.tag === 'input'));
-  inputs[0].value = '4'; inputs[1].value = '6';  // row1: 4 min @ 6 km/h
-  inputs[2].value = '2'; inputs[3].value = '3';  // row2: 2 min @ 3 km/h
+  inputs[0].value = '4'; inputs[1].value = '6';  // row1: 4 min @ 6
+  inputs[2].value = '2'; inputs[3].value = '3';  // row2: 2 min @ 3
   api.els.saveWorkout.click();
+  assert.equal(api.state, 'workouts', 'save returns to the workouts page');
   const custom = loadCustom({ storage });
-  assert.equal(custom.length, 1, 'custom workout saved');
-  assert.deepEqual(custom[0].segments, [{ minutes: 4, speed: 6 }, { minutes: 2, speed: 3 }], 'editable values saved');
-  assert.ok(api.els.dropdown.buttons[custom[0].id], 'appears in dropdown');
-  ok('builder form: editable minutes/speed rows saved with real values');
+  assert.equal(custom.length, 1);
+  assert.deepEqual(custom[0].segments, [
+    { minutes: 4, speed: 6, kind: 'effort' },
+    { minutes: 2, speed: 3, kind: 'recovery' },
+  ], 'editable rows saved WITH effort/recovery kind');
+  // list shows the workout; edit loads it into the builder
+  const list = api.els.workoutList.children.filter((c) => c.className === 'hrow');
+  assert.equal(list.length, 1, 'workout listed on the page');
+  const editBtn = list[0].children.find((c) => c.textContent === '✎');
+  editBtn.click();
+  assert.equal(api.state, 'builder');
+  assert.equal(api.els.builderName.value, 'Mon parcours', 'edit loads the workout');
+  api.els.cancelWorkout.click();
+  assert.equal(api.state, 'workouts', 'cancel returns to the list');
+  // delete removes it
+  const delBtn = api.els.workoutList.children.filter((c) => c.className === 'hrow')[0].children.find((c) => c.className && c.className.includes('del'));
+  delBtn.click();
+  assert.equal(loadCustom({ storage }).length, 0, 'workout deleted from the page');
+  ok('workouts page: create (with recovery segment), list, edit, delete');
+}
+
+// 11b. Incline is chosen at launch (fixed for the run) and RECORDED in the summary/stats.
+{
+  const sched = manualScheduler();
+  const positions = [{ id: 1, label: 'P1', degrees: 1 }, { id: 2, label: 'P2', degrees: 9 }];
+  const api = mount(fakeDoc(), deps({ positions, schedule: sched.schedule, unschedule: sched.unschedule }));
+  api.els.demoBtn.click();
+  api.setPosition(2);                           // choose incline before the run
+  api.els.startBtn.click(); sched.run(30); api.stopWorkout();
+  assert.equal(api.lastSummary.inclineDeg, 9, 'chosen incline angle recorded in the summary');
+  assert.ok(api.els.summary.innerHTML.includes('Inclinaison') && api.els.summary.innerHTML.includes('9°'), 'incline shown in the recap stats');
+  ok('incline chosen at launch is recorded in the session stats');
 }
 
 // 12. Pause/Resume: pause freezes the workout + stops belt + releases wake lock; resume continues.

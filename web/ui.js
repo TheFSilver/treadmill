@@ -10,7 +10,7 @@
 
 import { parseTreadmillData } from './ftms-core.js';
 import { WorkoutSession } from './session.js';
-import { getWorkout, allWorkouts, saveCustom } from './workouts.js';
+import { getWorkout, allWorkouts, saveCustom, loadCustom, deleteCustom } from './workouts.js';
 import { DEFAULT_POSITIONS } from './incline.js';
 import { createDropdown } from './dropdown.js';
 
@@ -47,20 +47,29 @@ export function mount(doc, deps) {
   els.setup = add('div', { id: 'setup', className: 'setup' });
   els.dropdown = createDropdown(doc, { items: allWorkouts({ storage }).map((w) => ({ id: w.id, label: w.name })), placeholder: 'Programme', onSelect: (id) => selectProgram(id) });
   els.setup.appendChild(els.dropdown.el);
-  els.newWorkoutBtn = add('button', { id: 'newWorkout', className: 'link', textContent: '+ Créer une séance' }, els.setup);
+  els.manageBtn = add('button', { id: 'manage', className: 'link', textContent: 'Gérer mes séances' }, els.setup);
 
-  // Incline lives OUTSIDE setup so it stays visible during an active workout (setup is hidden then).
+  // Incline selector — chosen BEFORE the run (manual/mechanical, can't change mid-workout).
   els.inclineRow = add('div', { id: 'incline', className: 'incline-row' });
-  add('span', { className: 'incline-label', textContent: 'Inclinaison' }, els.inclineRow);
+  add('span', { className: 'incline-label', textContent: 'Inclinaison (fixée pour la séance)' }, els.inclineRow);
   els.posButtons = {};
   buildPositionButtons();
 
-  // Custom workout builder (FitShow premium "design your own", free) — editable rows.
+  // Workouts management page (create / edit / delete custom workouts).
+  els.workouts = add('div', { id: 'workouts', className: 'workouts', hidden: true });
+  add('div', { className: 'sum-title', textContent: 'Mes séances' }, els.workouts);
+  els.workoutList = add('div', { className: 'wk-list' }, els.workouts);
+  els.newWorkoutBtn = add('button', { className: 'btn primary small', textContent: '+ Nouvelle séance' }, els.workouts);
+
+  // Custom workout builder (its own screen) — editable rows with effort/recovery kind.
   els.builder = add('div', { id: 'builder', className: 'builder', hidden: true });
+  els.builderTitle = add('div', { className: 'sum-title', textContent: 'Nouvelle séance' }, els.builder);
   els.builderName = add('input', { id: 'wname', className: 'inp', placeholder: 'Nom de la séance' }, els.builder);
   els.segList = add('div', { id: 'segs', className: 'seg-list' }, els.builder);
   els.addSeg = add('button', { className: 'btn small', textContent: '+ Segment' }, els.builder);
+  els.builderDur = add('div', { className: 'proginfo', textContent: '' }, els.builder);
   els.saveWorkout = add('button', { className: 'btn primary small', textContent: 'Enregistrer' }, els.builder);
+  els.cancelWorkout = add('button', { className: 'btn ghost small', textContent: 'Annuler' }, els.builder);
 
   // Settings screen (Réglages).
   els.settings = add('div', { id: 'settings', className: 'builder', hidden: true });
@@ -76,6 +85,7 @@ export function mount(doc, deps) {
   els.metrics = add('div', { id: 'metrics', className: 'metrics' });
   els.speed = add('div', { id: 'speed', className: 'big', textContent: '0.0' }, els.metrics);
   add('div', { className: 'unit', textContent: 'km/h' }, els.metrics);
+  els.inclineActive = add('div', { id: 'inclineActive', className: 'target', textContent: '' }, els.metrics);
   els.target = add('div', { id: 'target', className: 'target', textContent: '' }, els.metrics);
   els.progWrap = add('div', { id: 'progwrap', className: 'progwrap', hidden: true }, els.metrics);
   els.progBar = add('div', { id: 'progbar', className: 'progbar' }, els.progWrap);
@@ -125,11 +135,12 @@ export function mount(doc, deps) {
   function show(el, on) { el.hidden = !on; }
   function render() {
     show(els.setup, state === 'ready');
-    show(els.builder, state === 'ready' && builderOpen);
+    show(els.workouts, state === 'workouts');
+    show(els.builder, state === 'builder');
     show(els.summary, state === 'summary' || state === 'history' || state === 'detail');
     show(els.settings, state === 'settings');
-    // incline visible whenever a workout context exists (affects the calc live)
-    show(els.inclineRow, state === 'ready' || state === 'active' || state === 'paused');
+    // incline SELECTOR only on 'ready' (manual incline = chosen before the run, locked during)
+    show(els.inclineRow, state === 'ready');
     show(els.connectBtn, state === 'idle');
     show(els.demoBtn, state === 'idle');
     show(els.hrBtn, state === 'idle' || (state === 'ready' && !hrConnected));
@@ -138,7 +149,7 @@ export function mount(doc, deps) {
     show(els.newBtn, state === 'summary');
     show(els.histBtn, state === 'summary' || state === 'ready');
     show(els.settingsBtn, state === 'idle' || state === 'ready');
-    show(els.backBtn, state === 'history' || state === 'settings' || state === 'detail');
+    show(els.backBtn, state === 'history' || state === 'settings' || state === 'detail' || state === 'workouts' || state === 'builder');
     show(els.pauseBtn, state === 'active');
     show(els.resumeBtn, state === 'paused');
     show(els.stopBtn, state === 'active' || state === 'paused');
@@ -147,7 +158,6 @@ export function mount(doc, deps) {
     show(els.today, state === 'ready' || state === 'summary');
     for (const id in els.posButtons) els.posButtons[id].className = Number(id) === positionId ? 'pos on' : 'pos';
   }
-  let builderOpen = false;
 
   function selectProgram(id) { programId = id; els.dropdown.setValue(id, { silent: true }); onProgram(id); }
   function setPosition(id) { positionId = id; if (session) session.setPosition(id); onPosition(id); render(); }
@@ -176,7 +186,10 @@ export function mount(doc, deps) {
 
   function paintActive(r) {
     els.speed.textContent = r.speed.toFixed(1);
-    els.target.textContent = r.targetSpeed != null ? `objectif ${r.targetSpeed} km/h` : '';
+    const pos = curPositions.find((p) => p.id === positionId);
+    els.inclineActive.textContent = pos ? `⛰ ${pos.label} (${pos.degrees}°)` : '';
+    const kindLabel = r.segmentKind === 'recovery' ? 'récup' : r.segmentKind === 'warmup' ? 'échauffement' : 'effort';
+    els.target.textContent = r.targetSpeed != null ? `${kindLabel} · objectif ${r.targetSpeed} km/h` : '';
     els.mTime.textContent = `⏱ ${fmtTime(r.elapsedSec)}`;
     els.mDist.textContent = `📏 ${km(r.distanceM)} km`;
     els.mKcal.textContent = `🔥 ${Math.round(r.calories)} kcal`;
@@ -281,6 +294,7 @@ export function mount(doc, deps) {
       ['Pas', `${s.steps || 0}`],
       ['Vitesse moy', `${s.avgSpeed ?? '—'} km/h`],
       ['Vitesse max', `${s.maxSpeed ?? '—'} km/h`],
+      ...(s.inclineDeg != null ? [['Inclinaison', `${s.inclineDeg}°`]] : []),
       ...(s.avgHr ? [['FC moy', `${s.avgHr} bpm`], ['FC pic', `${s.peakHr} bpm`]] : []),
     ];
     const sub = s.date ? `<div class="hist-tot">${s.date} · ${s.program || ''}</div>` : '';
@@ -334,12 +348,38 @@ export function mount(doc, deps) {
     showHistory(); // refresh in place
   }
 
-  // Leave history/settings/detail back to where we came from.
+  // Leave history/settings/detail/workouts/builder back to where we came from.
   function goBack() {
     if (state === 'detail') { showHistory(); return; }
+    if (state === 'builder') { showWorkouts(); return; }
     state = prevState || 'ready';
     if (state === 'summary' && lastSummary) renderSummary(lastSummary);
     render();
+  }
+
+  // --- workouts management page ------------------------------------------------------------
+  function showWorkouts() {
+    if (state !== 'workouts' && state !== 'builder') prevState = state;
+    state = 'workouts';
+    const customs = loadCustom({ storage });
+    if (els.workoutList.replaceChildren) els.workoutList.replaceChildren(); else if (els.workoutList.children) els.workoutList.children.length = 0;
+    if (!customs.length) add('div', { className: 'hrow', textContent: 'Aucune séance personnalisée.' }, els.workoutList);
+    for (const w of customs) {
+      const row = add('div', { className: 'hrow' }, els.workoutList);
+      const info = add('div', { className: 'hrow-info', style: { cursor: 'pointer' } }, row);
+      add('span', { textContent: w.name }, info);
+      add('span', { textContent: `${(w.segments || []).length} seg · ${(w.segments || []).reduce((s, x) => s + (x.minutes || 0), 0)} min` }, info);
+      info.addEventListener('click', () => startBuilder(w));
+      const edit = add('button', { className: 'btn small ghost', textContent: '✎' }, row);
+      edit.addEventListener('click', () => startBuilder(w));
+      const del = add('button', { className: 'btn small ghost del', textContent: '🗑' }, row);
+      del.addEventListener('click', () => { deleteCustom(w.id, { storage }); refreshDropdown(); showWorkouts(); });
+    }
+    render();
+  }
+
+  function refreshDropdown() {
+    els.dropdown.setItems(allWorkouts({ storage }).map((x) => ({ id: x.id, label: x.name })));
   }
 
   // --- settings (Réglages) -----------------------------------------------------------------
@@ -390,13 +430,26 @@ export function mount(doc, deps) {
   function setSpeed(v) { manualSpeed = clamp(v, 0.5, 8); if (isDemo && sim) sim.setTarget(manualSpeed); if (controllable) treadmill.setSpeed(manualSpeed).catch(() => {}); }
   function nudge(d) { setSpeed(Math.round((manualSpeed + d) * 10) / 10); } // fine 0.1 step
 
-  // --- custom builder (editable rows) ------------------------------------------------------
-  let segRows = []; // [{minEl, spdEl}]
-  function toggleBuilder() { builderOpen = !builderOpen; if (builderOpen && !segRows.length) { segDrafts = [{ minutes: 3, speed: 4 }]; } if (builderOpen) renderSegs(); render(); }
-  function addSegRow() { segDrafts = readSegs(); segDrafts.push({ minutes: 3, speed: 4 }); renderSegs(); }
-  function removeSegRow(i) { segDrafts = readSegs(); segDrafts.splice(i, 1); if (!segDrafts.length) segDrafts.push({ minutes: 3, speed: 4 }); renderSegs(); }
+  // --- custom builder (its own screen; editable rows with effort/recovery kind) -------------
+  let segRows = [];        // [{minEl, spdEl, kind}]
+  let editingId = null;    // non-null when editing an existing workout
+
+  function startBuilder(workout) {
+    editingId = workout && workout.id ? workout.id : null;
+    els.builderTitle.textContent = editingId ? 'Modifier la séance' : 'Nouvelle séance';
+    els.builderName.value = workout ? workout.name : '';
+    segDrafts = workout && workout.segments && workout.segments.length
+      ? workout.segments.map((s) => ({ minutes: s.minutes, speed: s.speed, kind: s.kind || 'effort' }))
+      : [{ minutes: 5, speed: 4, kind: 'effort' }];
+    renderSegs();
+    state = 'builder'; render();
+  }
+  function cancelBuilder() { showWorkouts(); }
+
+  function addSegRow() { segDrafts = readSegs(); segDrafts.push({ minutes: 3, speed: 3, kind: 'recovery' }); renderSegs(); }
+  function removeSegRow(i) { segDrafts = readSegs(); segDrafts.splice(i, 1); if (!segDrafts.length) segDrafts.push({ minutes: 5, speed: 4, kind: 'effort' }); renderSegs(); }
   function readSegs() {
-    return segRows.map((r) => ({ minutes: num(r.minEl.value, 1), speed: num(r.spdEl.value, 1) }));
+    return segRows.map((r) => ({ minutes: num(r.minEl.value, 1), speed: num(r.spdEl.value, 1), kind: r.kind }));
   }
   function renderSegs() {
     if (els.segList.replaceChildren) els.segList.replaceChildren(); else if (els.segList.children) els.segList.children.length = 0;
@@ -408,20 +461,30 @@ export function mount(doc, deps) {
       add('span', { className: 'seg-x', textContent: 'min @' }, row);
       const spdEl = add('input', { className: 'inp tiny', type: 'number', step: '0.1', value: s.speed, placeholder: 'km/h' }, row);
       add('span', { className: 'seg-x', textContent: 'km/h' }, row);
+      const ref = { minEl, spdEl, kind: s.kind || 'effort' };
+      const kindBtn = add('button', { className: `btn small kind ${ref.kind}`, textContent: kindShort(ref.kind) }, row);
+      kindBtn.addEventListener('click', () => { segDrafts = readSegs(); segDrafts[i].kind = cycleKind(segDrafts[i].kind); renderSegs(); });
       const del = add('button', { className: 'btn small ghost', textContent: '×' }, row);
       del.addEventListener('click', () => removeSegRow(i));
-      segRows.push({ minEl, spdEl });
+      segRows.push(ref);
     });
+    const total = readSegs().reduce((a, s) => a + s.minutes, 0);
+    els.builderDur.textContent = `Durée totale ${total} min · ${segDrafts.length} segment(s)`;
   }
-  // Programmatic add (used by the form's Save and by tests). DRY entry point.
-  function addCustomWorkout({ name, segments }) {
-    const segs = (segments && segments.length ? segments : [{ minutes: 5, speed: 4 }])
-      .map((s) => ({ minutes: num(s.minutes, 1), speed: num(s.speed, 1) }));
-    const w = saveCustom({ name: name || 'Ma séance', segments: segs }, { storage });
-    els.dropdown.setItems(allWorkouts({ storage }).map((x) => ({ id: x.id, label: x.name })));
-    selectProgram(w.id);
-    builderOpen = false; segDrafts = []; segRows = [];
-    render();
+  function saveBuilder() {
+    const segs = readSegs().map((s) => ({ minutes: num(s.minutes, 1), speed: num(s.speed, 1), kind: s.kind }));
+    addCustomWorkout({ id: editingId, name: els.builderName.value, segments: segs });
+    showWorkouts();
+  }
+
+  // Programmatic add/update (used by Save and by tests). DRY entry point.
+  function addCustomWorkout({ id, name, segments }) {
+    const segs = (segments && segments.length ? segments : [{ minutes: 5, speed: 4, kind: 'effort' }])
+      .map((s) => ({ minutes: num(s.minutes, 1), speed: num(s.speed, 1), kind: s.kind || 'effort' }));
+    const w = saveCustom({ id: id || undefined, name: name || 'Ma séance', segments: segs }, { storage });
+    refreshDropdown();
+    selectProgram(w.id); // the new/edited workout becomes the chosen program
+    segDrafts = []; segRows = []; editingId = null;
     return w;
   }
 
@@ -439,9 +502,11 @@ export function mount(doc, deps) {
   els.backBtn.addEventListener('click', goBack);
   els.slower.addEventListener('click', () => nudge(-0.1));
   els.faster.addEventListener('click', () => nudge(0.1));
-  els.newWorkoutBtn.addEventListener('click', toggleBuilder);
+  els.manageBtn.addEventListener('click', showWorkouts);
+  els.newWorkoutBtn.addEventListener('click', () => startBuilder(null));
   els.addSeg.addEventListener('click', addSegRow);
-  els.saveWorkout.addEventListener('click', () => addCustomWorkout({ name: els.builderName.value, segments: readSegs() }));
+  els.saveWorkout.addEventListener('click', saveBuilder);
+  els.cancelWorkout.addEventListener('click', cancelBuilder);
   els.settingsBtn.addEventListener('click', openSettings);
   els.saveSettings.addEventListener('click', applySettings);
 
@@ -457,7 +522,7 @@ export function mount(doc, deps) {
   return {
     els, connectTreadmill, connectHr, startDemo, startWorkout, stopWorkout, disconnect,
     selectProgram, setPosition, setSpeed, addCustomWorkout, showHistory, showSessionDetail, deleteSessionRow, goBack, openSettings, applySettings,
-    pauseWorkout, resumeWorkout,
+    showWorkouts, startBuilder, saveBuilder, pauseWorkout, resumeWorkout,
     setStreak(t) { els.streak.textContent = t; },
     set onFinish(fn) { onFinish = fn; }, set onProgram(fn) { onProgram = fn; }, set onPosition(fn) { onPosition = fn; }, set onSettings(fn) { onSettings = fn; },
     get weightKg() { return curWeight; }, get maxHr() { return curMaxHr; }, get positions() { return curPositions; },
@@ -468,6 +533,8 @@ export function mount(doc, deps) {
 
 function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 function num(v, dflt) { const n = Number(v); return Number.isFinite(n) ? n : dflt; }
+function kindShort(k) { return k === 'recovery' ? 'Récup' : k === 'warmup' ? 'Échauf' : 'Effort'; }
+function cycleKind(k) { return k === 'effort' ? 'recovery' : k === 'recovery' ? 'warmup' : 'effort'; }
 function degOf(positions, id) { const p = positions.find((x) => x.id === id); return p && p.degrees != null ? p.degrees : 0; }
 // Set innerHTML where available (real DOM); fall back to textContent for the fake test DOM.
 function setHTML(el, html) { if ('innerHTML' in el) el.innerHTML = html; else el.textContent = html; }
