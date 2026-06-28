@@ -1,0 +1,14 @@
+{
+  "name": "Treadmill — homeTro HM1 libre",
+  "short_name": "Treadmill",
+  "description": "Pilote ton tapis homeTro HM1 (FTMS) sans FitShow ni abonnement : stats justes avec inclinaison, zones FC, programmes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08090f",
+  "theme_color": "#0a0c12",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
