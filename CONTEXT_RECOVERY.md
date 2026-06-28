@@ -1,60 +1,69 @@
 # 🔄 CONTEXT_RECOVERY — treadmill
 
 ## 🎯 État actuel
-PWA pour piloter le tapis **homeTro HM1** via **FTMS** (`0x1826`, confirmé au scan) **sans
-FitShow ni abonnement**. Bat les features premium FitShow + l'inclinaison qu'il ignore.
-Stack identique à `resonance`/`fittrack`. **13 fichiers de tests comportementaux verts.**
-Repo privé `github.com/TheFSilver/treadmill`.
+PWA (vanilla JS, Web Bluetooth) qui pilote le tapis de marche **homeTro HM1** au **standard
+FTMS** (`0x1826`, confirmé au scan nRF) — **sans l'app FitShow ni son abonnement**. Validée
+sur le vrai tapis (28/06) : km/h correct, start/stop/±/contrôle FTMS `0x2AD9` OK. Repo privé
+**github.com/TheFSilver/treadmill**. Même ADN que [[resonance]] / [[fittrack]] (core découplé,
+deps injectées, **behavioral-TDD**, déploiement Cloudflare Pages). **16 fichiers de tests verts.**
 
-## ✅ Fait — vérifié sur le VRAI tapis (28/06) : km/h OK, start/stop/±/contrôle FTMS OK
-- `ftms-core.js` — parse Treadmill Data `0x2ACD` + Control Point `0x2AD9`. Testé.
-- `incline.js` — **l'edge** : calories ACSM (pente + poids), grade-adjusted, METs. Angles réels 1°/4° (manuel).
-- `session.js` — cerveau : stats live + **vitesse max, pas/cadence, vitesse moy**, zones FC (H10), programmes.
-- `workouts.js` — catalogue : built-ins (free/deskwalk/fatburn/intervalles/**Japanese Walking IWT**) + **séances custom** persistées (CRUD).
-- `ftms-ble.js` — adaptateur Web Bluetooth tapis (request control + start/stop/speed/incline).
-- `ui.js` — **MACHINE À ÉTATS** idle→ready→active→summary : connexion ne lance PAS le chrono ;
-  Stop → **écran récap stats retenues** sans déconnecter ; vitesse **quick-sets 2/4/6/8 + fin ±0,1** ;
-  **historique** ; **créateur de séances**. L'inclinaison HM1 = mécanique (boutons = calcul seul, pas de commande belt).
-- `simulator.js` — tapis FTMS synthétique (+ HR). Coquille PWA premium (grille stats, barres de zones).
-- **DRY** : `web-ble`, `h10-core`, `dropdown` (gagne `setItems`), `streak`, `trend`, `notify`, `push-*` réutilisés/synchronisés avec resonance.
-- **14 fichiers de tests verts**, dont boot/intégration prouvant les 5 fixes (chrono, vitesse, rétention stats, Japanese, custom).
+## ⚙️ Lancer / tester
+```bash
+cd web && for t in test-*.mjs; do node "$t"; done   # 16 fichiers (Node, zéro dépendance)
+cd web && python3 -m http.server 8000               # démo locale → Chrome → bouton "Démo"
+```
+Android/Chrome only (Web Bluetooth, pas iOS). HTTPS requis (sauf localhost). **1 seule
+connexion BLE** → fermer l'app FitShow avant de connecter.
 
-## ✅ Restructure séances + inclinaison (28/06)
-- **Page dédiée "Mes séances"** (état `workouts`) : liste des séances custom, **créer / modifier / supprimer** (plus de builder inline sur l'accueil ; bouton "Gérer mes séances").
-- **Builder sur sa page** (état `builder`) : nom + segments éditables (minutes/vitesse) + **type de segment** effort/récup/échauffement (bouton cyclable, coloré), durée totale, Enregistrer/Annuler.
-- **Inclinaison = choisie au lancement** (manuelle/mécanique → fixée pour toute la séance, sélecteur sur `ready` uniquement, **read-only affichée en course**) et **enregistrée dans le récap + l'historique** (`session.summary.inclineDeg`).
+## 🧱 Architecture (web/)
+- `ftms-core.js` — parse Treadmill Data `0x2ACD` + commandes Control Point `0x2AD9`. Pur, testé.
+- `ftms-ble.js` — adaptateur Web Bluetooth tapis. Reconnexion sans sélecteur via `getDevices()`.
+- `incline.js` — **l'edge** : calories ACSM (pente + poids), grade-adjusted pace/distance, METs.
+  Angles réels HM1 : Position 1 ≈ **1°**, Position 2 ≈ **4°** (manuel ; pente % via tan()).
+- `session.js` — cerveau séance : stats live (durée, distance, calories, **pas/cadence**, vitesse
+  moy/max), zones FC (synergie H10), programmes par segments. Durée segment en **secondes**
+  (`segDurationSec`, rétrocompat `minutes`). `summary()` enregistre l'inclinaison (inclineDeg/grade).
+- `workouts.js` — catalogue. `ensureSeeded()` sème les 4 séances structurées comme **séances
+  éditables** au 1er run (Desk walk, Fat burn, Intervalles, **Japanese Walking IWT**). "Marche
+  libre" = seul défaut permanent. CRUD custom (saveCustom/loadCustom/deleteCustom).
+- `settings.js` — poids (synergie fittrack), FC max, 2 angles d'inclinaison, objectif quotidien km.
+- `wakelock.js` — écran reste allumé en séance. `simulator.js` — tapis FTMS synthétique (démo/tests).
+- `streak.js` / `trend.js` — habit layer (streak quotidien, historique, `todayTotals`).
+- `ui.js` — machine à états + tout le câblage. `app.js` — plug navigateur. `sw.js` — offline + Web Push.
+- **DRY portfolio** : `web-ble`, `h10-core`, `dropdown`, `streak`, `trend`, `notify`, `push-*`
+  réutilisés/synchronisés avec resonance.
 
-## ✅ Premium (28/06, carte blanche)
-- **Écran Réglages** (`settings.js`) : poids (synergie fittrack), FC max, **2 angles d'inclinaison** calibrables, objectif quotidien. Persisté.
-- **Créateur de séances** : form éditable (lignes minutes/vitesse, ajout/suppression), persisté + dans le menu.
-- **Pause/Reprendre** (état `paused`) : gèle stats + stoppe belt + libère le wake lock.
-- **Progression programme** : barre + temps restant + prochain palier.
-- **Wake Lock** (`wakelock.js`) : écran reste allumé en séance.
-- **Sécurité** : déconnexion BLE en pleine séance → **auto-pause** + notif.
-- **Objectif quotidien** + progression du jour (synergie habit avec fittrack/resonance via `trend.todayTotals`).
-- Bouton **Retour** sur historique/réglages (plus de cul-de-sac).
-- **16 fichiers de tests verts.** `trend.js` gagne `todayTotals` (synchronisé resonance).
+## 🖥️ Machine à états (ui.js)
+`idle → ready → active ⇄ paused → summary` (+ `workouts`, `builder`, `settings`, `history`, `detail`).
+- **idle** : Connecter / H10 / Démo.
+- **ready** : dropdown programme, sélecteur **inclinaison (choisie au lancement, fixe)**, Démarrer,
+  objectif du jour, Gérer mes séances, Historique, Réglages.
+- **active** : stats live + barre de progression (temps restant + prochain palier) + vitesse
+  quick-sets 2/4/6/8 + fin ±0,1 + Pause/Stop. Inclinaison affichée read-only.
+- **paused** : Reprendre/Stop. **summary** : récap complet retenu, tapis reste connecté.
+- **workouts** : liste unifiée (= dropdown), modifier/supprimer (sauf Marche libre). **builder** :
+  nom + segments (min:s, type effort/récup/échauffement, durée totale, cap 60 min).
+- **history** : liste cliquable → **detail** (toutes stats), 🗑 supprime. Retour partout.
+
+## ✅ Décisions / validations clés
+- Inclinaison **manuelle** → choisie avant le run, fixe, enregistrée dans les stats.
+- **Vitesse 1-8 km/h**, durée segment **1 s → 60 min**, **total ≤ 60 min** (le tapis s'arrête à 60).
+  Saisie clavier clampée (86→8, 0→1 s).
+- **Refresh** : Web Bluetooth **ne survit pas** à un reload (limite navigateur). Mitigation :
+  reconnexion **1-tap sans sélecteur** (getDevices) + retour à la **dernière page** (saveScreen/lastScreen)
+  + tentative auto au chargement si appareil déjà autorisé.
+- **Japanese Walking (IWT)** : protocole en **intensité** (rapide ~70% / RPE 6-7 / zone FC 4 ;
+  lent ~40% / zone 2), pas en km/h. Défaut 7,5/3,5 km/h ; viser les zones FC avec le H10.
 
 ## 📋 Prochaines étapes
-1. ✅ Vrai HM1 validé : **km/h correct**, **start/stop/±/contrôle FTMS `0x2AD9` OK** (28/06).
-2. **Calibrage fin inclinaison** : angles 1°/4° du manuel ("about") — affiner si besoin sur le matériel.
-3. **Synergie poids** : brancher le poids réel depuis fittrack (pour l'instant `loadPref('weightKg', 80)` —
-   idée : store partagé entre les 3 PWA, ou saisie manuelle dans un écran réglages).
-4. **Déployer** Cloudflare Pages (output `web`, HTTPS) → PWA Android, installer.
-5. **UI builder** : le créateur de séances expose `addCustomWorkout()` + un form minimal (nom + segments) ;
-   enrichir l'édition des segments (inputs minutes/vitesse par ligne) si besoin.
-6. (Option) Web Push quotidien via le worker resonance (mutualisable) ; parcours virtuels ; export CSV/Health ;
-   écran réglages (poids, FC max, calibrage angles) ; sparkline tendances dans l'historique.
+1. **Déployer** Cloudflare Pages (output dir `web`, HTTPS) → installer en PWA Android.
+2. Brancher le **poids réel** auto depuis fittrack (pour l'instant saisie manuelle dans Réglages).
+3. (Option) Web Push quotidien via le worker resonance (mutualisable) ; export CSV/Apple Health ;
+   sparkline tendances dans l'historique ; ECG/ACC brut via service PMD (voir PROTOCOL.md).
 
-## ⚙️ Commandes
-```bash
-cd web && for t in test-*.mjs; do node "$t"; done   # 13 fichiers
-cd web && python3 -m http.server 8000               # démo (bouton "Démo", sans tapis)
-```
-
-## 🧠 Règles
-**DRY portfolio** (modules partagés avec resonance/fittrack, ne pas dupliquer). **Behavioral-TDD**
-(boot/câblage/stats end-to-end/inclinaison→calories/programme→vitesse). Android/Chrome only.
+## 🔌 Synergies portfolio
+H10/resonance → zones FC live · fittrack → poids → calories justes · streak/objectif partagés
+(1 flywheel d'habitude across les 3 PWA biométriques).
 
 ## Phrase magique pour reprendre
-« Reprise treadmill : lis CONTEXT_RECOVERY.md, lance les tests, on en est à tester le vrai HM1 + calibrer l'inclinaison. »
+« Reprise treadmill : lis CONTEXT_RECOVERY.md, lance les tests (16 verts), on en est à déployer Cloudflare Pages / brancher le poids fittrack. »
