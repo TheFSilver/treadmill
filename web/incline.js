@@ -3,16 +3,21 @@
 // pace using the ACSM walking equation, factoring the REAL grade AND body weight (the latter
 // pulled from fittrack → synergy). Pure functions.
 
-// Two configurable incline positions (% grade). Calibrate to the real HM1 angles; defaults
-// are sensible placeholders (never 0, per the hardware).
+// The HM1's TWO physical incline positions, from the official manual (degrees is what the
+// manual specifies — the screw goes in hole 1 or hole 2). Grade % for the ACSM math is
+// derived from the angle: grade = tan(angle). 4° ≈ 7% (matches the spec sheet's "7%").
 export const DEFAULT_POSITIONS = [
-  { id: 1, label: 'Position 1', grade: 3 },
-  { id: 2, label: 'Position 2', grade: 6 },
+  { id: 1, label: 'Position 1', degrees: 1 }, // hole 1, adjuster flat  → ~1°  (~1.7%)
+  { id: 2, label: 'Position 2', degrees: 4 }, // hole 2, adjuster up    → ~4°  (~7.0%)
 ];
+
+// Grade percent (rise/run × 100) from an angle in degrees — the value the ACSM equation needs.
+export function gradeFromDegrees(deg) { return Math.tan((deg * Math.PI) / 180) * 100; }
 
 export function gradeForPosition(positionId, positions = DEFAULT_POSITIONS) {
   const p = positions.find((x) => x.id === positionId);
-  return p ? p.grade : 0;
+  if (!p) return 0;
+  return p.degrees != null ? gradeFromDegrees(p.degrees) : (p.grade || 0); // accept either field
 }
 
 // ACSM walking VO2 (ml/kg/min): 0.1*v + 1.8*v*grade + 3.5, v in m/min, grade as fraction.

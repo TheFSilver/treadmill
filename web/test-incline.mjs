@@ -2,7 +2,7 @@
 // and weight, grade-adjusted speed exceeds raw speed on an incline, and positions map to grades.
 import assert from 'node:assert';
 import {
-  gradeForPosition, vo2Walking, kcalPerMin, kcalBurned, gradeAdjustedSpeed, mets, DEFAULT_POSITIONS,
+  gradeForPosition, gradeFromDegrees, vo2Walking, kcalPerMin, kcalBurned, gradeAdjustedSpeed, mets, DEFAULT_POSITIONS,
 } from './incline.js';
 
 let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
@@ -31,11 +31,14 @@ assert.ok(ga > 4, `grade-adjusted speed (${ga.toFixed(2)}) should exceed raw 4 k
 assert.ok(Math.abs(gradeAdjustedSpeed(4, 0) - 4) < 1e-9, 'flat → unchanged');
 ok('grade-adjusted speed > raw speed on an incline, equal on flat');
 
-// Positions map to grades; the hardware is never flat.
-assert.equal(gradeForPosition(1), 3);
-assert.equal(gradeForPosition(2), 6);
-assert.ok(DEFAULT_POSITIONS.every((p) => p.grade > 0), 'no position is flat (HM1 is never 0)');
-ok('two incline positions map to non-zero grades');
+// Real HM1 positions (from the manual): hole 1 ≈ 1°, hole 2 ≈ 4°. Grade % via tan().
+// tan(1°)≈1.75%, tan(4°)≈6.99% (≈ the spec sheet's "7%").
+assert.ok(Math.abs(gradeFromDegrees(4) - 6.993) < 0.01, 'tan(4°) ≈ 7% grade');
+assert.ok(Math.abs(gradeForPosition(1) - 1.746) < 0.01, `pos1 (1°) ≈ 1.75%, got ${gradeForPosition(1)}`);
+assert.ok(Math.abs(gradeForPosition(2) - 6.993) < 0.01, `pos2 (4°) ≈ 7%, got ${gradeForPosition(2)}`);
+assert.ok(DEFAULT_POSITIONS.every((p) => p.degrees > 0), 'no position is flat (HM1 is never 0°)');
+assert.ok(gradeForPosition(2) > gradeForPosition(1), 'position 2 steeper than 1');
+ok('HM1 positions are 1°/4° (from manual), grade derived via tan()');
 
 assert.ok(mets(5, 0) > 1);
 ok('METs computed (premium analytics, free here)');

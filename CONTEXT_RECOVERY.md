@@ -20,7 +20,10 @@ Repo privé `github.com/TheFSilver/treadmill`.
 ## 📋 Prochaines étapes (au matériel)
 1. **Tester le vrai HM1** : connecter (Chrome Android, fermer FitShow). Vérifier que les trames
    `0x2ACD` arrivent et qu'un **Start `0x2AD9`** est accepté (sinon lecture seule = stats OK quand même).
-2. **Calibrer les 2 angles d'inclinaison** réels dans `incline.js` (`DEFAULT_POSITIONS`, défauts 3%/6%).
+   ⚠️ **Vérifier l'UNITÉ vitesse** : tapis à 5 mph (son écran) → l'app doit afficher **~8 km/h**.
+   Si ~5 → le module envoie du mph brut → ajouter flag conversion mph→km/h dans `ftms-core`.
+2. **Inclinaison calibrée depuis le manuel** : Position 1 ≈ **1°**, Position 2 ≈ **4°** (dans
+   `incline.js`, stockées en degrés, pente via tan). À reconfirmer sur le matériel ("about").
 3. **Synergie poids** : brancher le poids depuis fittrack (pour l'instant `loadPref('weightKg', 80)`).
 4. **Déployer** Cloudflare Pages (output `web`, HTTPS) → PWA Android.
 5. (Option) Web Push quotidien via le worker resonance (mutualisable) ; parcours virtuels ; export.

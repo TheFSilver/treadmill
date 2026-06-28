@@ -19,11 +19,21 @@ Scan nRF Connect du `FS-8B1D77` (= homeTro HM1) :
   Réponse : `[0x80, requestOp, result]` (result `0x01` = succès).
 - (Option) **Machine Status `0x2ADA`** (notify) : changements d'état machine.
 
-## À vérifier sur le vrai HM1
+## Inclinaison — valeurs RÉELLES (manuel officiel HM1)
+- **2 positions mécaniques** (vis dans trou 1 ou trou 2) :
+  - **Position 1** (adjuster couché, trou 1) → **≈ 1°** (~1,7% de pente)
+  - **Position 2** (adjuster debout, trou 2) → **≈ 4°** (~7,0% — colle avec la spec "7%")
+- Stockées en **degrés** dans `incline.js` (`DEFAULT_POSITIONS`), pente % calculée via `tan()`.
+- Vitesse manuel : **0,5–5,0 mph = 1–8 km/h** (max app plafonné à 8 km/h).
+
+## ⚠️ À vérifier sur le vrai HM1
+- **UNITÉ vitesse** : la spec FTMS impose `0x2ACD` en **km/h** (×0,01). Test : tapis à 5 mph sur
+  son écran → l'app doit afficher **~8 km/h**. Si elle affiche ~5, le module envoie du mph brut
+  dans le champ km/h → ajouter un flag de conversion mph→km/h dans `ftms-core`.
 - Le Control Point `0x2AD9` est-il **inscriptible** ? (annonce FTMS = bon signe ; sinon lecture seule).
 - Le tapis rapporte-t-il l'inclinaison dans `0x2ACD` ? (probablement non — pente mécanique →
   on la gère côté app via `incline.js`).
-- Les **2 angles d'inclinaison physiques réels** (pour calibrer `DEFAULT_POSITIONS`).
+- Confirmer les **angles 1°/4°** sur le matériel (le manuel dit "about").
 
 ## Compatibilité
 Web Bluetooth → Chrome Android/desktop. Pas iOS. HTTPS requis. Une seule connexion à la fois

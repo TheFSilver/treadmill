@@ -36,7 +36,8 @@ export function mount(doc, deps) {
   add('span', { className: 'incline-label', textContent: 'Inclinaison' }, els.inclineRow);
   els.posButtons = {};
   for (const p of positions) {
-    els.posButtons[p.id] = add('button', { className: 'pos', textContent: `${p.label} (${p.grade}%)` }, els.inclineRow);
+    const tag = p.degrees != null ? `${p.degrees}°` : `${p.grade}%`;
+    els.posButtons[p.id] = add('button', { className: 'pos', textContent: `${p.label} (${tag})` }, els.inclineRow);
     els.posButtons[p.id].addEventListener('click', () => setPosition(p.id));
   }
 
@@ -145,7 +146,7 @@ export function mount(doc, deps) {
   els.hrBtn.addEventListener('click', connectHr);
   els.simBtn.addEventListener('click', startDemo);
   els.startBtn.addEventListener('click', () => { if (controllable) treadmill.start().catch(() => {}); });
-  els.faster.addEventListener('click', () => { manualSpeed = Math.min(12, manualSpeed + 0.5); if (controllable) treadmill.setSpeed(manualSpeed).catch(() => {}); });
+  els.faster.addEventListener('click', () => { manualSpeed = Math.min(8, manualSpeed + 0.5); if (controllable) treadmill.setSpeed(manualSpeed).catch(() => {}); }); // HM1 max 8 km/h
   els.slower.addEventListener('click', () => { manualSpeed = Math.max(0.5, manualSpeed - 0.5); if (controllable) treadmill.setSpeed(manualSpeed).catch(() => {}); });
   els.stopBtn.addEventListener('click', stop);
 
