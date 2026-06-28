@@ -90,6 +90,7 @@ export function mount(doc, deps) {
   els.stopBtn = add('button', { id: 'stop', className: 'btn ghost', textContent: 'Stop' }, els.controls);
   els.newBtn = add('button', { id: 'new', className: 'btn primary', textContent: 'Nouvelle séance' }, els.controls);
   els.histBtn = add('button', { id: 'hist', className: 'btn', textContent: 'Historique' }, els.controls);
+  els.backBtn = add('button', { id: 'back', className: 'btn', textContent: '← Retour' }, els.controls);
   els.disconnectBtn = add('button', { id: 'disconnect', className: 'btn ghost', textContent: 'Déconnecter' }, els.controls);
 
   // --- state -------------------------------------------------------------------------------
@@ -119,6 +120,7 @@ export function mount(doc, deps) {
     show(els.stopBtn, state === 'active');
     show(els.newBtn, state === 'summary');
     show(els.histBtn, state === 'summary' || state === 'ready');
+    show(els.backBtn, state === 'history');
     for (const id in els.posButtons) els.posButtons[id].className = Number(id) === positionId ? 'pos on' : 'pos';
   }
   let builderOpen = false;
@@ -243,6 +245,13 @@ export function mount(doc, deps) {
     render();
   }
 
+  // Leave the history view back to where we came from (ready or summary).
+  function goBack() {
+    state = prevState === 'summary' ? 'summary' : 'ready';
+    if (state === 'summary' && lastSummary) renderSummary(lastSummary);
+    render();
+  }
+
   function disconnect() {
     stopLoop();
     if (treadmill.disconnect) treadmill.disconnect();
@@ -281,6 +290,7 @@ export function mount(doc, deps) {
   els.disconnectBtn.addEventListener('click', disconnect);
   els.newBtn.addEventListener('click', () => { state = 'ready'; render(); });
   els.histBtn.addEventListener('click', showHistory);
+  els.backBtn.addEventListener('click', goBack);
   els.slower.addEventListener('click', () => nudge(-0.1));
   els.faster.addEventListener('click', () => nudge(0.1));
   els.newWorkoutBtn.addEventListener('click', toggleBuilder);
@@ -291,7 +301,7 @@ export function mount(doc, deps) {
 
   return {
     els, connectTreadmill, connectHr, startDemo, startWorkout, stopWorkout, disconnect,
-    selectProgram, setPosition, setSpeed, addCustomWorkout, showHistory,
+    selectProgram, setPosition, setSpeed, addCustomWorkout, showHistory, goBack,
     setStreak(t) { els.streak.textContent = t; },
     set onFinish(fn) { onFinish = fn; }, set onProgram(fn) { onProgram = fn; }, set onPosition(fn) { onPosition = fn; },
     get state() { return state; }, get programId() { return programId; }, get positionId() { return positionId; },

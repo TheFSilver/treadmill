@@ -158,4 +158,26 @@ const deps = (over = {}) => ({
   ok('disconnect returns to idle and drops the connection');
 }
 
+// 9. History is not a dead-end: a Back button returns to where we came from (ready or summary).
+{
+  const sched = manualScheduler();
+  const api = mount(fakeDoc(), deps({ schedule: sched.schedule, unschedule: sched.unschedule }));
+  // from ready
+  api.els.demoBtn.click();
+  assert.equal(api.els.histBtn.hidden, false, 'Historique reachable from ready');
+  api.els.histBtn.click();
+  assert.equal(api.state, 'history');
+  assert.equal(api.els.backBtn.hidden, false, 'Back button shown in history');
+  api.els.backBtn.click();
+  assert.equal(api.state, 'ready', 'Back from history → ready');
+  // from summary
+  api.els.startBtn.click(); sched.run(2); api.stopWorkout();
+  assert.equal(api.state, 'summary');
+  api.els.histBtn.click(); assert.equal(api.state, 'history');
+  api.els.backBtn.click();
+  assert.equal(api.state, 'summary', 'Back from history → summary');
+  assert.ok(api.els.summary.innerHTML.includes('Récapitulatif'), 'summary re-rendered on return');
+  ok('history has a Back button returning to the previous screen (ready/summary)');
+}
+
 console.log(`boot/integration: ${n} checks passed`);
