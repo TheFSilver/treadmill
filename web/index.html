@@ -73,8 +73,12 @@
     .zfill { height:100%; border-radius:999px; }
     .z1{background:#4fa3ff}.z2{background:#41d4a8}.z3{background:#ffd24a}.z4{background:#ff8c4b}.z5{background:#ff5a7a}
     .hist-tot { color:var(--muted); font-size:.85rem; margin-bottom:10px; }
-    .hist-list { display:flex; flex-direction:column; gap:4px; }
-    .hrow { display:flex; justify-content:space-between; gap:8px; font-size:.8rem; padding:8px 10px; background:var(--card); border-radius:10px; font-variant-numeric:tabular-nums; }
+    .hist-list { display:flex; flex-direction:column; gap:6px; }
+    .hrow { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:.8rem; padding:8px 10px; background:var(--card); border-radius:10px; font-variant-numeric:tabular-nums; }
+    .hrow-info { display:flex; flex:1; justify-content:space-between; gap:8px; cursor:pointer; }
+    .hrow.tappable:active { background:rgba(255,255,255,.09); }
+    .del { padding:6px 9px; opacity:.6; }
+    .del:active { opacity:1; }
 
     .speedctl { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
     .chip { min-width:48px; font-weight:700; }

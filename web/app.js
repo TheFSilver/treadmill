@@ -8,7 +8,7 @@ import { H10Connection } from './web-ble.js';
 import { WorkoutSession } from './session.js';
 import { makeTreadmillSimulator } from './simulator.js';
 import { createNotifier } from './notify.js';
-import { recordSession, loadStreak, streakText, loadSessions, todayStr, loadPref, savePref } from './streak.js';
+import { recordSession, loadStreak, streakText, loadSessions, deleteSession, todayStr, loadPref, savePref } from './streak.js';
 import { summary as summarizeHistory, todayTotals } from './trend.js';
 import { loadSettings, saveSettings, positionsFromSettings } from './settings.js';
 import { createWakeLock } from './wakelock.js';
@@ -32,6 +32,7 @@ const app = mount(document, {
   wakeLock,
   loadHistory: () => loadSessions().filter((s) => s.activity === 'treadmill'),
   summarizeHistory,
+  deleteSession: (id) => deleteSession(id),
   todayTotals,
   today: () => todayStr(),
 });

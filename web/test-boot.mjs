@@ -281,4 +281,36 @@ const deps = (over = {}) => ({
   ok('daily goal progress shown; BLE disconnect auto-pauses (safety)');
 }
 
+// 15. History rows: tap → full detail; trash → delete (with re-render).
+{
+  let history = [
+    { id: 'a', activity: 'treadmill', date: '2026-06-27', program: 'Fat burn', distanceM: 2000, calories: 120, steps: 2800, durationSec: 1500, avgSpeed: 4.8, maxSpeed: 6, gaDistanceM: 2200, zoneSeconds: [0, 0, 0, 0, 0, 0] },
+    { id: 'b', activity: 'treadmill', date: '2026-06-28', program: 'Marche libre', distanceM: 110, calories: 7, steps: 150, durationSec: 66, avgSpeed: 3, maxSpeed: 3.2, gaDistanceM: 120, zoneSeconds: [] },
+  ];
+  const deleted = [];
+  const api = mount(fakeDoc(), deps({
+    loadHistory: () => history,
+    deleteSession: (id) => { deleted.push(id); history = history.filter((x) => x.id !== id); },
+    summarizeHistory: () => ({ days: 2 }),
+  }));
+  api.showHistory();
+  const list = api.els.summary.children.find((c) => c.className === 'hist-list');
+  assert.equal(list.children.length, 2, 'two history rows');
+  // tap a row's info → detail with full stats
+  const firstInfo = list.children[0].children.find((c) => c.className === 'hrow-info');
+  firstInfo.click();
+  assert.equal(api.state, 'detail');
+  assert.ok(api.els.summary.innerHTML.includes('Détail de la séance') && /km/.test(api.els.summary.innerHTML), 'detail shows full stats');
+  // back → history
+  api.els.backBtn.click(); assert.equal(api.state, 'history');
+  // delete a row via trash → removed + re-rendered
+  const list2 = api.els.summary.children.find((c) => c.className === 'hist-list');
+  const delBtn = list2.children[0].children.find((c) => c.className && c.className.includes('del'));
+  delBtn.click();
+  assert.equal(deleted.length, 1, 'delete called');
+  const list3 = api.els.summary.children.find((c) => c.className === 'hist-list');
+  assert.equal(list3.children.length, 1, 'row removed after delete');
+  ok('history: tap row → detail stats; trash → delete + re-render');
+}
+
 console.log(`boot/integration: ${n} checks passed`);

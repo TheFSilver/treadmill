@@ -13,10 +13,13 @@ function writeJSON(s, k, v) { s.setItem(k, JSON.stringify(v)); }
 export function todayStr(d = new Date()) { return d.toISOString().slice(0, 10); }
 export function prevDay(dateStr) { const d = new Date(dateStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }
 
-export function recordSession(session, { storage, date = todayStr() } = {}) {
+let _seq = 0;
+function newId() { return `s-${Date.now ? Date.now() : 0}-${_seq++}`; }
+
+export function recordSession(session, { storage, date = todayStr(), id = newId() } = {}) {
   const s = store(storage);
   const sessions = readJSON(s, KEY_SESSIONS, []);
-  sessions.push({ ...session, date });
+  sessions.push({ id, ...session, date });
   writeJSON(s, KEY_SESSIONS, sessions);
 
   const streak = readJSON(s, KEY_STREAK, { current: 0, longest: 0, lastDate: null });
@@ -34,6 +37,11 @@ export function loadStreak({ storage } = {}) {
 }
 export function loadSessions({ storage } = {}) {
   return readJSON(store(storage), KEY_SESSIONS, []);
+}
+// Delete one logged session by id (the streak history stays; we don't recompute past streaks).
+export function deleteSession(id, { storage } = {}) {
+  const s = store(storage);
+  writeJSON(s, KEY_SESSIONS, readJSON(s, KEY_SESSIONS, []).filter((x) => x.id !== id));
 }
 
 // Generic preferences (e.g. the last selected protocol, restored on reopen).

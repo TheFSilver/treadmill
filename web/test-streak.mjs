@@ -2,7 +2,7 @@
 // after a gap, ignores same-day repeats, and persists the session log. Storage + date are
 // injected so it's deterministic.
 import assert from 'node:assert';
-import { recordSession, loadStreak, loadSessions, streakText, prevDay, savePref, loadPref } from './streak.js';
+import { recordSession, loadStreak, loadSessions, deleteSession, streakText, prevDay, savePref, loadPref } from './streak.js';
 
 let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
 
@@ -51,6 +51,19 @@ ok('prevDay + streakText render correctly');
   savePref('protocol', 'wimhof', { storage });
   assert.equal(loadPref('protocol', 'coherence', { storage }), 'wimhof', 'persisted choice restored');
   ok('savePref/loadPref persist the last protocol');
+}
+
+// Sessions get an id and can be deleted by it.
+{
+  const storage = fakeStorage();
+  recordSession({ distanceM: 100 }, { storage, date: '2026-06-01', id: 'x1' });
+  recordSession({ distanceM: 200 }, { storage, date: '2026-06-02', id: 'x2' });
+  assert.equal(loadSessions({ storage }).length, 2);
+  assert.ok(loadSessions({ storage })[0].id === 'x1', 'session carries an id');
+  deleteSession('x1', { storage });
+  const left = loadSessions({ storage });
+  assert.equal(left.length, 1); assert.equal(left[0].id, 'x2', 'correct session deleted');
+  ok('sessions have ids and can be deleted by id');
 }
 
 console.log(`streak: ${n} checks passed`);

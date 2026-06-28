@@ -24,7 +24,7 @@ export function mount(doc, deps) {
     notifier = { notify() {}, buzz() {} }, storage,
     weightKg: initWeight = 75, maxHr: initMaxHr = 190, positions: initPositions = DEFAULT_POSITIONS,
     defaultProgramId = 'free', defaultPositionId = 1,
-    loadHistory = () => [], summarizeHistory = () => ({ total: 0, days: 0 }),
+    loadHistory = () => [], summarizeHistory = () => ({ total: 0, days: 0 }), deleteSession = () => {},
     todayTotals = () => ({ distanceM: 0, calories: 0, steps: 0 }), today = () => '',
     goalKm = 3, wakeLock = { request() {}, release() {} },
     quickSpeeds = [2, 4, 6, 8],
@@ -126,7 +126,7 @@ export function mount(doc, deps) {
   function render() {
     show(els.setup, state === 'ready');
     show(els.builder, state === 'ready' && builderOpen);
-    show(els.summary, state === 'summary' || state === 'history');
+    show(els.summary, state === 'summary' || state === 'history' || state === 'detail');
     show(els.settings, state === 'settings');
     // incline visible whenever a workout context exists (affects the calc live)
     show(els.inclineRow, state === 'ready' || state === 'active' || state === 'paused');
@@ -138,7 +138,7 @@ export function mount(doc, deps) {
     show(els.newBtn, state === 'summary');
     show(els.histBtn, state === 'summary' || state === 'ready');
     show(els.settingsBtn, state === 'idle' || state === 'ready');
-    show(els.backBtn, state === 'history' || state === 'settings');
+    show(els.backBtn, state === 'history' || state === 'settings' || state === 'detail');
     show(els.pauseBtn, state === 'active');
     show(els.resumeBtn, state === 'paused');
     show(els.stopBtn, state === 'active' || state === 'paused');
@@ -270,46 +270,73 @@ export function mount(doc, deps) {
   }
   function stopWorkout() { if (state === 'active' || state === 'paused') finishWorkout(); }
 
-  function renderSummary(s) {
-    const zonesTotal = s.zoneSeconds.reduce((a, b) => a + b, 0) || 1;
+  function renderSummary(s, title = 'Récapitulatif') {
+    const zoneSeconds = s.zoneSeconds || [];
+    const zonesTotal = zoneSeconds.reduce((a, b) => a + b, 0) || 1;
     const rows = [
       ['Durée', fmtTime(s.durationSec)],
       ['Distance', `${km(s.distanceM)} km`],
-      ['Distance équiv. (pente)', `${km(s.gaDistanceM)} km`],
+      ['Distance équiv. (pente)', `${km(s.gaDistanceM || s.distanceM)} km`],
       ['Calories', `${s.calories} kcal`],
-      ['Pas', `${s.steps}`],
-      ['Vitesse moy', `${s.avgSpeed} km/h`],
-      ['Vitesse max', `${s.maxSpeed} km/h`],
+      ['Pas', `${s.steps || 0}`],
+      ['Vitesse moy', `${s.avgSpeed ?? '—'} km/h`],
+      ['Vitesse max', `${s.maxSpeed ?? '—'} km/h`],
       ...(s.avgHr ? [['FC moy', `${s.avgHr} bpm`], ['FC pic', `${s.peakHr} bpm`]] : []),
     ];
-    let html = '<div class="sum-title">Récapitulatif</div><div class="sum-grid">';
+    const sub = s.date ? `<div class="hist-tot">${s.date} · ${s.program || ''}</div>` : '';
+    let html = `<div class="sum-title">${title}</div>${sub}<div class="sum-grid">`;
     for (const [k, v] of rows) html += `<div class="sum-cell"><span class="sum-k">${k}</span><span class="sum-v">${v}</span></div>`;
     html += '</div>';
-    if (s.avgHr) {
+    if (s.avgHr && zoneSeconds.length) {
       html += '<div class="zones">';
-      for (let z = 1; z <= 5; z++) { const pct = Math.round((s.zoneSeconds[z] / zonesTotal) * 100); html += `<div class="zbar"><span>${ZONE_LABELS[z]}</span><div class="ztrack"><div class="zfill z${z}" style="width:${pct}%"></div></div><span>${pct}%</span></div>`; }
+      for (let z = 1; z <= 5; z++) { const pct = Math.round(((zoneSeconds[z] || 0) / zonesTotal) * 100); html += `<div class="zbar"><span>${ZONE_LABELS[z]}</span><div class="ztrack"><div class="zfill z${z}" style="width:${pct}%"></div></div><span>${pct}%</span></div>`; }
       html += '</div>';
     }
     setHTML(els.summary, html);
   }
 
+  // History as real DOM rows: tap a row → detail, tap × → delete. (Not innerHTML, so we can
+  // wire per-row handlers and stay testable.)
   function showHistory() {
-    prevState = state; state = 'history';
-    const sessions = loadHistory().slice(-30).reverse();
-    const tot = summarizeHistory(loadHistory());
-    let html = `<div class="sum-title">Historique</div><div class="hist-tot">${tot.days || 0} jours · ${sessions.length} séances récentes</div><div class="hist-list">`;
+    if (state !== 'history' && state !== 'detail') prevState = state;
+    state = 'history';
+    const all = loadHistory();
+    const sessions = all.slice(-30).reverse();
+    const tot = summarizeHistory(all);
+    if (els.summary.replaceChildren) els.summary.replaceChildren(); else if (els.summary.children) els.summary.children.length = 0;
+    add('div', { className: 'sum-title', textContent: 'Historique' }, els.summary);
+    add('div', { className: 'hist-tot', textContent: `${tot.days || 0} jours · ${sessions.length} séances récentes` }, els.summary);
+    const list = add('div', { className: 'hist-list' }, els.summary);
+    if (!sessions.length) { add('div', { className: 'hrow', textContent: 'Aucune séance pour l’instant.' }, list); render(); return; }
     for (const s of sessions) {
-      const d = s.date || '';
-      html += `<div class="hrow"><span>${d}</span><span>${s.program || ''}</span><span>${km(s.distanceM || 0)} km</span><span>${s.calories || 0} kcal</span><span>${fmtTime(s.durationSec || 0)}</span></div>`;
+      const row = add('div', { className: 'hrow tappable' }, list);
+      const info = add('div', { className: 'hrow-info' }, row);
+      add('span', { textContent: s.date || '' }, info);
+      add('span', { textContent: s.program || '' }, info);
+      add('span', { textContent: `${km(s.distanceM || 0)} km` }, info);
+      add('span', { textContent: `${s.calories || 0} kcal` }, info);
+      add('span', { textContent: fmtTime(s.durationSec || 0) }, info);
+      info.addEventListener('click', () => showSessionDetail(s));
+      const del = add('button', { className: 'btn small ghost del', textContent: '🗑' }, row);
+      del.addEventListener('click', () => deleteSessionRow(s));
     }
-    if (!sessions.length) html += '<div class="hrow">Aucune séance pour l’instant.</div>';
-    html += '</div>';
-    setHTML(els.summary, html);
     render();
   }
 
-  // Leave history/settings back to where we came from (idle/ready/summary).
+  function showSessionDetail(s) {
+    prevState = 'history'; state = 'detail';
+    renderSummary(s, 'Détail de la séance');
+    render();
+  }
+
+  function deleteSessionRow(s) {
+    if (s && s.id != null) deleteSession(s.id);
+    showHistory(); // refresh in place
+  }
+
+  // Leave history/settings/detail back to where we came from.
   function goBack() {
+    if (state === 'detail') { showHistory(); return; }
     state = prevState || 'ready';
     if (state === 'summary' && lastSummary) renderSummary(lastSummary);
     render();
@@ -429,7 +456,7 @@ export function mount(doc, deps) {
 
   return {
     els, connectTreadmill, connectHr, startDemo, startWorkout, stopWorkout, disconnect,
-    selectProgram, setPosition, setSpeed, addCustomWorkout, showHistory, goBack, openSettings, applySettings,
+    selectProgram, setPosition, setSpeed, addCustomWorkout, showHistory, showSessionDetail, deleteSessionRow, goBack, openSettings, applySettings,
     pauseWorkout, resumeWorkout,
     setStreak(t) { els.streak.textContent = t; },
     set onFinish(fn) { onFinish = fn; }, set onProgram(fn) { onProgram = fn; }, set onPosition(fn) { onPosition = fn; }, set onSettings(fn) { onSettings = fn; },
