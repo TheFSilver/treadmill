@@ -14,6 +14,17 @@ export function coherenceTrend(sessions) {
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+// Today's totals across sessions (for the daily goal / progress). dateStr = 'YYYY-MM-DD'.
+export function todayTotals(sessions, dateStr) {
+  const t = { distanceM: 0, calories: 0, steps: 0, durationSec: 0, count: 0 };
+  for (const s of sessions) {
+    if (s.date !== dateStr) continue;
+    t.distanceM += s.distanceM || 0; t.calories += s.calories || 0;
+    t.steps += s.steps || 0; t.durationSec += s.durationSec || 0; t.count += 1;
+  }
+  return t;
+}
+
 export function summary(sessions) {
   const days = new Set(sessions.map((s) => s.date)).size;
   const scored = sessions.map((s) => s.score && s.score.mean).filter((x) => typeof x === 'number');

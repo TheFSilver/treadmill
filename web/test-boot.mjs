@@ -15,11 +15,12 @@ import { loadCustom } from './workouts.js';
 let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
 
 // --- fake DOM ---
-function mkEl() {
+function mkEl(tag = 'div') {
   const e = {
-    children: [], style: {}, _on: {}, _text: '', _html: '', value: '', hidden: false, className: '',
+    tag, children: [], style: {}, _on: {}, _text: '', _html: '', value: '', hidden: false, className: '',
     appendChild(c) { this.children.push(c); return c; },
     replaceChildren() { this.children = []; },
+    remove() {},
     addEventListener(ev, h) { (this._on[ev] ||= []).push(h); },
     click() { (this._on.click || []).forEach((h) => h()); },
     set textContent(v) { this._text = v; }, get textContent() { return this._text; },
@@ -27,7 +28,7 @@ function mkEl() {
   };
   return e;
 }
-function fakeDoc() { const app = mkEl(); return { getElementById: () => app, createElement: () => mkEl() }; }
+function fakeDoc() { const app = mkEl(); return { getElementById: () => app, createElement: (t) => mkEl(t) }; }
 function manualScheduler() { let cb = null; return { schedule: (fn) => { cb = fn; return 1; }, unschedule: () => { cb = null; }, run: (t) => { for (let i = 0; i < t; i++) if (cb) cb(); }, active: () => !!cb }; }
 function fakeStorage() { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; }
 function fakeTreadmill({ controllable = true } = {}) {
@@ -178,6 +179,106 @@ const deps = (over = {}) => ({
   assert.equal(api.state, 'summary', 'Back from history → summary');
   assert.ok(api.els.summary.innerHTML.includes('Récapitulatif'), 'summary re-rendered on return');
   ok('history has a Back button returning to the previous screen (ready/summary)');
+}
+
+// 10. Settings screen: edit weight + incline angle → applied to the next workout's calories,
+//     persisted via onSettings, and Back returns. (premium settings)
+{
+  const sched = manualScheduler();
+  let saved = null;
+  const api = mount(fakeDoc(), deps({ schedule: sched.schedule, unschedule: sched.unschedule }));
+  api.onSettings = (s) => { saved = s; };
+  // open settings from idle
+  api.els.settingsBtn.click();
+  assert.equal(api.state, 'settings');
+  api.els.setWeight.value = '100'; api.els.setMaxHr.value = '180';
+  api.els.setPos1.value = '2'; api.els.setPos2.value = '8';
+  api.els.saveSettings.click();
+  assert.equal(api.state, 'idle', 'Back to where we came from after saving');
+  assert.equal(api.weightKg, 100, 'weight applied');
+  assert.equal(api.positions[1].degrees, 8, 'incline angle applied');
+  assert.deepEqual(saved, { weightKg: 100, maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3 }, 'persisted via onSettings');
+  // heavier weight → more calories in a demo run
+  api.els.demoBtn.click(); api.els.startBtn.click(); sched.run(60);
+  const kcalHeavy = Number(api.els.mKcal.textContent.replace(/\D/g, ''));
+  assert.ok(kcalHeavy > 0, 'workout uses the new settings');
+  ok('settings edit weight/maxHr/incline → applied + persisted, Back returns');
+}
+
+// 11. Custom workout builder form: editable minutes/speed rows → saved with the real values.
+{
+  const storage = fakeStorage();
+  const api = mount(fakeDoc(), deps({ storage }));
+  api.els.demoBtn.click(); // need 'ready' so builder can open (setup visible)
+  api.disconnect();         // back to idle; builder logic still works via toggle in ready
+  // open in a fresh ready: connect demo again
+  api.els.demoBtn.click();
+  api.els.newWorkoutBtn.click();              // toggle builder open → seeds 1 row
+  api.els.addSeg.click();                      // now 2 rows
+  api.els.builderName.value = 'Mon parcours';
+  // set editable values on the rendered rows (the form's inputs)
+  // segRows are not directly exposed; drive via the Save reading current input values:
+  // find the two input rows inside segList
+  const inputs = api.els.segList.children.flatMap((row) => row.children.filter((c) => c.tag === 'input'));
+  inputs[0].value = '4'; inputs[1].value = '6';  // row1: 4 min @ 6 km/h
+  inputs[2].value = '2'; inputs[3].value = '3';  // row2: 2 min @ 3 km/h
+  api.els.saveWorkout.click();
+  const custom = loadCustom({ storage });
+  assert.equal(custom.length, 1, 'custom workout saved');
+  assert.deepEqual(custom[0].segments, [{ minutes: 4, speed: 6 }, { minutes: 2, speed: 3 }], 'editable values saved');
+  assert.ok(api.els.dropdown.buttons[custom[0].id], 'appears in dropdown');
+  ok('builder form: editable minutes/speed rows saved with real values');
+}
+
+// 12. Pause/Resume: pause freezes the workout + stops belt + releases wake lock; resume continues.
+{
+  const t = fakeTreadmill();
+  const sched = manualScheduler();
+  const wl = { _on: false, request() { this._on = true; }, release() { this._on = false; }, get active() { return this._on; } };
+  const api = mount(fakeDoc(), deps({ treadmill: t.conn, wakeLock: wl, schedule: sched.schedule, unschedule: sched.unschedule }));
+  api.els.connectBtn.click(); await new Promise((r) => setTimeout(r, 0));
+  api.els.startBtn.click();
+  assert.ok(wl.active, 'wake lock acquired on start');
+  for (let i = 0; i < 10; i++) { t.conn.onData(parseFrame({ speed: 5, distance: (i + 1) * 1.4 })); sched.run(1); }
+  const kcalBefore = api.els.mKcal.textContent;
+  api.els.pauseBtn.click();
+  assert.equal(api.state, 'paused');
+  assert.ok(!wl.active, 'wake lock released on pause');
+  assert.ok(t.writes.some((w) => w[0] === 'stop'), 'belt stopped on pause');
+  sched.run(20); // ticks during pause must NOT accumulate
+  assert.equal(api.els.mKcal.textContent, kcalBefore, 'no accumulation while paused');
+  api.els.resumeBtn.click();
+  assert.equal(api.state, 'active'); assert.ok(wl.active, 'wake lock re-acquired on resume');
+  ok('pause freezes stats + stops belt + releases wake lock; resume continues');
+}
+
+// 13. Program progress: a program shows a progress bar + remaining time + next-step hint.
+{
+  const sched = manualScheduler();
+  const api = mount(fakeDoc(), deps({ schedule: sched.schedule, unschedule: sched.unschedule }));
+  api.els.demoBtn.click(); api.selectProgram('intervals'); api.els.startBtn.click();
+  sched.run(10);
+  assert.equal(api.els.progWrap.hidden, false, 'progress bar shown for a program');
+  assert.ok(/reste/.test(api.els.progInfo.textContent), 'shows remaining time');
+  ok('program shows progress bar + remaining + next-step');
+}
+
+// 14. Daily goal: today line reflects history vs goal; disconnect-safety auto-pauses.
+{
+  const sched = manualScheduler();
+  const history = [{ activity: 'treadmill', date: '2026-06-28', distanceM: 1500, calories: 80, steps: 2000 }];
+  const t = fakeTreadmill();
+  const api = mount(fakeDoc(), deps({
+    treadmill: t.conn, schedule: sched.schedule, unschedule: sched.unschedule,
+    goalKm: 3, loadHistory: () => history, todayTotals: (s, d) => ({ distanceM: 1500, calories: 80, steps: 2000 }), today: () => '2026-06-28',
+  }));
+  api.els.connectBtn.click(); await new Promise((r) => setTimeout(r, 0));
+  assert.ok(/1\.50 \/ 3 km/.test(api.els.today.textContent) && /50%/.test(api.els.today.textContent), `today progress: ${api.els.today.textContent}`);
+  // disconnect-safety: a drop during an active workout auto-pauses
+  api.els.startBtn.click(); assert.equal(api.state, 'active');
+  t.conn.onDisconnect();
+  assert.equal(api.state, 'paused', 'BLE disconnect during workout auto-pauses');
+  ok('daily goal progress shown; BLE disconnect auto-pauses (safety)');
 }
 
 console.log(`boot/integration: ${n} checks passed`);

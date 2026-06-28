@@ -19,6 +19,17 @@ Repo privé `github.com/TheFSilver/treadmill`.
 - **DRY** : `web-ble`, `h10-core`, `dropdown` (gagne `setItems`), `streak`, `trend`, `notify`, `push-*` réutilisés/synchronisés avec resonance.
 - **14 fichiers de tests verts**, dont boot/intégration prouvant les 5 fixes (chrono, vitesse, rétention stats, Japanese, custom).
 
+## ✅ Premium (28/06, carte blanche)
+- **Écran Réglages** (`settings.js`) : poids (synergie fittrack), FC max, **2 angles d'inclinaison** calibrables, objectif quotidien. Persisté.
+- **Créateur de séances** : form éditable (lignes minutes/vitesse, ajout/suppression), persisté + dans le menu.
+- **Pause/Reprendre** (état `paused`) : gèle stats + stoppe belt + libère le wake lock.
+- **Progression programme** : barre + temps restant + prochain palier.
+- **Wake Lock** (`wakelock.js`) : écran reste allumé en séance.
+- **Sécurité** : déconnexion BLE en pleine séance → **auto-pause** + notif.
+- **Objectif quotidien** + progression du jour (synergie habit avec fittrack/resonance via `trend.todayTotals`).
+- Bouton **Retour** sur historique/réglages (plus de cul-de-sac).
+- **16 fichiers de tests verts.** `trend.js` gagne `todayTotals` (synchronisé resonance).
+
 ## 📋 Prochaines étapes
 1. ✅ Vrai HM1 validé : **km/h correct**, **start/stop/±/contrôle FTMS `0x2AD9` OK** (28/06).
 2. **Calibrage fin inclinaison** : angles 1°/4° du manuel ("about") — affiner si besoin sur le matériel.

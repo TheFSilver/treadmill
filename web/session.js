@@ -80,6 +80,8 @@ export class WorkoutSession {
 
     const seg = segmentAt(this.program, this.elapsedSec);
     const totalSec = programDurationSec(this.program);
+    const segs = this.program && this.program.segments;
+    const nextSpeed = segs && seg && !seg.done && segs[seg.index + 1] ? segs[seg.index + 1].speed : null;
     return {
       elapsedSec: this.elapsedSec,
       speed,
@@ -96,7 +98,10 @@ export class WorkoutSession {
       segment: seg,
       targetSpeed: seg && !seg.done ? seg.speed : null,
       targetIncline: seg && !seg.done ? seg.incline ?? null : null,
+      nextSpeed,
       progress: totalSec ? Math.min(1, this.elapsedSec / totalSec) : 0,
+      totalSec,
+      remainingSec: totalSec ? Math.max(0, totalSec - this.elapsedSec) : null,
       done: !!(seg && seg.done),
     };
   }

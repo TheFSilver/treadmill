@@ -8,10 +8,14 @@ import { H10Connection } from './web-ble.js';
 import { WorkoutSession } from './session.js';
 import { makeTreadmillSimulator } from './simulator.js';
 import { createNotifier } from './notify.js';
-import { recordSession, loadStreak, streakText, loadSessions, loadPref, savePref } from './streak.js';
-import { summary as summarizeHistory } from './trend.js';
+import { recordSession, loadStreak, streakText, loadSessions, todayStr, loadPref, savePref } from './streak.js';
+import { summary as summarizeHistory, todayTotals } from './trend.js';
+import { loadSettings, saveSettings, positionsFromSettings } from './settings.js';
+import { createWakeLock } from './wakelock.js';
 
 const notifier = createNotifier();
+const wakeLock = createWakeLock();        // keep the screen on during a workout
+const settings = loadSettings();          // weight (fittrack synergy), maxHr, incline angles, goal
 
 const app = mount(document, {
   treadmill: new TreadmillConnection(),     // FTMS (homeTro HM1) — Android Chrome
@@ -19,16 +23,22 @@ const app = mount(document, {
   makeSession: (o) => new WorkoutSession(o),
   makeSimulator: makeTreadmillSimulator,
   notifier,
-  weightKg: loadPref('weightKg', 80),       // from fittrack (manual for now)
-  maxHr: loadPref('maxHr', 190),
+  weightKg: settings.weightKg,
+  maxHr: settings.maxHr,
+  positions: positionsFromSettings(settings),
   defaultProgramId: loadPref('program', 'free'),
   defaultPositionId: loadPref('position', 1),
+  goalKm: settings.goalKm,
+  wakeLock,
   loadHistory: () => loadSessions().filter((s) => s.activity === 'treadmill'),
   summarizeHistory,
+  todayTotals,
+  today: () => todayStr(),
 });
 
 app.onProgram = (id) => savePref('program', id);
 app.onPosition = (id) => savePref('position', id);
+app.onSettings = (partial) => saveSettings(partial);   // weight/maxHr/incline angles persisted
 
 // Shared habit layer: every modality (weigh, breathe, walk) feeds ONE streak (compound).
 app.setStreak(streakText(loadStreak()));

@@ -41,13 +41,24 @@
     .pos.on { color:#0b0d15; background:var(--accent); border-color:transparent; font-weight:600; }
 
     .builder { display:flex; flex-direction:column; gap:8px; width:100%; max-width:420px; padding:14px; background:var(--card); border:1px solid var(--line); border-radius:16px; }
-    .inp { font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#0e1320; color:var(--fg); }
-    .seg-list { color:var(--muted); font-size:.85rem; text-align:left; display:flex; flex-direction:column; gap:4px; }
+    .inp { font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#0e1320; color:var(--fg); width:100%; }
+    .inp.tiny { width:72px; text-align:center; }
+    .seg-list { color:var(--muted); font-size:.85rem; text-align:left; display:flex; flex-direction:column; gap:6px; }
+    .seg-row { display:flex; align-items:center; gap:6px; }
+    .seg-i { color:var(--muted); width:28px; }
+    .seg-x { color:var(--muted); font-size:.8rem; }
+    .field { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .field-l { color:var(--muted); font-size:.88rem; }
+    .field .inp { width:110px; text-align:center; }
 
     .metrics { display:flex; flex-direction:column; align-items:center; gap:6px; width:100%; max-width:440px; }
     .big { font-size:5.2rem; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
     .unit { color:var(--muted); margin-top:-6px; letter-spacing:.12em; }
     .target { color:var(--accent); font-size:.9rem; min-height:1.1em; }
+    .today { color:var(--muted); font-size:.85rem; font-variant-numeric:tabular-nums; }
+    .progwrap { width:100%; max-width:380px; height:8px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; margin-top:8px; }
+    .progbar { height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .5s ease; }
+    .proginfo { color:var(--muted); font-size:.82rem; min-height:1em; }
     .live-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; width:100%; margin-top:10px; }
     .m { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; font-size:1.1rem; font-variant-numeric:tabular-nums; }
 
