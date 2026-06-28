@@ -16,9 +16,12 @@ export const SEED_WORKOUTS = [
     { minutes: 3, speed: 3.5, kind: 'warmup' },
     ...Array.from({ length: 6 }, () => [{ minutes: 1, speed: 6, kind: 'effort' }, { minutes: 1, speed: 3.5, kind: 'recovery' }]).flat(),
     { minutes: 2, speed: 3, kind: 'recovery' } ] },
-  // Japanese Walking (Interval Walking Training, Nemoto/Masuki). 5×(3 min brisk + 3 min slow) = 30 min.
+  // Japanese Walking (Interval Walking Training, Nose/Masuki — Shinshu Univ., Mayo Clinic 2007).
+  // 5×(3 min FAST + 3 min slow) = 30 min. Intensity-based, NOT a fixed speed: fast = ~70% peak
+  // aerobic / RPE 6-7 / HR zone 4 ; slow = ~40% / RPE 2-3 / zone 2. Speed is individual — these
+  // are brisk defaults (cap 8 km/h on the HM1) ; with the H10, target the HR zones instead.
   { id: 'japanese', name: 'Japanese Walking (IWT)', segments: [
-    ...Array.from({ length: 5 }, () => [{ minutes: 3, speed: 6, kind: 'effort' }, { minutes: 3, speed: 3, kind: 'recovery' }]).flat() ] },
+    ...Array.from({ length: 5 }, () => [{ minutes: 3, speed: 7.5, kind: 'effort' }, { minutes: 3, speed: 3.5, kind: 'recovery' }]).flat() ] },
 ];
 
 const KEY = 'treadmill.custom';
