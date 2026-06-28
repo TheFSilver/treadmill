@@ -9,7 +9,7 @@
 // one loop, one start path.
 
 import { parseTreadmillData } from './ftms-core.js';
-import { WorkoutSession } from './session.js';
+import { WorkoutSession, segDurationSec } from './session.js';
 import { getWorkout, allWorkouts, saveCustom, loadCustom, deleteCustom, ensureSeeded } from './workouts.js';
 import { DEFAULT_POSITIONS } from './incline.js';
 import { createDropdown } from './dropdown.js';
@@ -18,11 +18,12 @@ const ZONE_LABELS = ['repos', 'Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
 const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const km = (m) => (m / 1000).toFixed(2);
 
-// HM1 limits: speed 1–8 km/h ; a single segment ≤ 60 min ; total workout ≤ 60 min (the belt
-// auto-stops at 60). Clamping keeps typed values valid (e.g. 86 → 8, 0 → 1).
-const SPEED_MIN = 1, SPEED_MAX = 8, SEG_MIN = 1, MAX_TOTAL_MIN = 60;
+// HM1 limits: speed 1–8 km/h ; segment duration 1 s … 60 min ; total workout ≤ 60 min (belt
+// auto-stops at 60). Clamping keeps typed values valid (e.g. 86 → 8, 0 s → 1 s).
+const SPEED_MIN = 1, SPEED_MAX = 8, MAX_TOTAL_SEC = 3600, SEG_MIN_SEC = 1;
 const clampSpeed = (v) => clamp(Math.round(num(v, SPEED_MIN) * 10) / 10, SPEED_MIN, SPEED_MAX);
-const clampMinutes = (v) => clamp(Math.round(num(v, SEG_MIN)), SEG_MIN, MAX_TOTAL_MIN);
+// duration from a minutes field + a seconds field → clamped total seconds [1 .. 3600]
+const clampDuration = (min, sec) => clamp(Math.round(num(min, 0)) * 60 + Math.round(num(sec, 0)), SEG_MIN_SEC, MAX_TOTAL_SEC);
 
 export function mount(doc, deps) {
   const {
@@ -395,7 +396,8 @@ export function mount(doc, deps) {
       const info = add('div', { className: 'hrow-info', style: { cursor: 'pointer' } }, row);
       add('span', { textContent: w.name }, info);
       const segs = w.segments || [];
-      add('span', { textContent: segs.length ? `${segs.length} seg · ${segs.reduce((s, x) => s + (x.minutes || 0), 0)} min` : 'par défaut' }, info);
+      const totalSec = segs.reduce((s, x) => s + segDurationSec(x), 0);
+      add('span', { textContent: segs.length ? `${segs.length} seg · ${fmtTime(totalSec)}` : 'par défaut' }, info);
       if (w.builtin) continue; // free walk = default, nothing to edit/delete
       info.addEventListener('click', () => startBuilder(w));
       const edit = add('button', { className: 'btn small ghost', textContent: '✎' }, row);
@@ -470,59 +472,62 @@ export function mount(doc, deps) {
     els.builderTitle.textContent = editingId ? 'Modifier la séance' : (asCopy ? 'Dupliquer la séance' : 'Nouvelle séance');
     els.builderName.value = workout ? (asCopy ? `${workout.name} (copie)` : workout.name) : '';
     segDrafts = workout && workout.segments && workout.segments.length
-      ? workout.segments.map((s) => ({ minutes: s.minutes, speed: s.speed, kind: s.kind || 'effort' }))
-      : [{ minutes: 5, speed: 4, kind: 'effort' }];
+      ? workout.segments.map((s) => ({ seconds: segDurationSec(s), speed: s.speed, kind: s.kind || 'effort' }))
+      : [{ seconds: 300, speed: 4, kind: 'effort' }];
     renderSegs();
     state = 'builder'; render();
   }
   function cancelBuilder() { showWorkouts(); }
 
-  function addSegRow() { segDrafts = readSegs(); segDrafts.push({ minutes: 3, speed: 3, kind: 'recovery' }); renderSegs(); }
-  function removeSegRow(i) { segDrafts = readSegs(); segDrafts.splice(i, 1); if (!segDrafts.length) segDrafts.push({ minutes: 5, speed: 4, kind: 'effort' }); renderSegs(); }
+  function addSegRow() { segDrafts = readSegs(); segDrafts.push({ seconds: 180, speed: 3, kind: 'recovery' }); renderSegs(); }
+  function removeSegRow(i) { segDrafts = readSegs(); segDrafts.splice(i, 1); if (!segDrafts.length) segDrafts.push({ seconds: 300, speed: 4, kind: 'effort' }); renderSegs(); }
   function readSegs() {
-    return segRows.map((r) => ({ minutes: clampMinutes(r.minEl.value), speed: clampSpeed(r.spdEl.value), kind: r.kind }));
+    return segRows.map((r) => ({ seconds: clampDuration(r.minEl.value, r.secEl.value), speed: clampSpeed(r.spdEl.value), kind: r.kind }));
   }
   function renderSegs() {
     if (els.segList.replaceChildren) els.segList.replaceChildren(); else if (els.segList.children) els.segList.children.length = 0;
     segRows = [];
     segDrafts.forEach((s, i) => {
+      const dur = s.seconds != null ? s.seconds : (s.minutes || 0) * 60;
+      const mm = Math.floor(dur / 60), ss = dur % 60;
       const row = add('div', { className: 'seg-row' }, els.segList);
       add('span', { className: 'seg-i', textContent: `${i + 1}` }, row);
       const f1 = add('span', { className: 'seg-field' }, row);
-      const minEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'numeric', value: s.minutes }, f1);
+      const minEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'numeric', value: mm }, f1);
       add('span', { className: 'seg-u', textContent: 'min' }, f1);
+      const secEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'numeric', value: ss }, f1);
+      add('span', { className: 'seg-u', textContent: 's' }, f1);
       const f2 = add('span', { className: 'seg-field' }, row);
       const spdEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'decimal', step: '0.1', value: s.speed }, f2);
       add('span', { className: 'seg-u', textContent: 'km/h' }, f2);
-      const ref = { minEl, spdEl, kind: s.kind || 'effort' };
-      // clamp typed values on blur (86 → 8, 0 → 1) and refresh the total
-      minEl.addEventListener('change', () => { segDrafts = readSegs(); renderSegs(); });
-      spdEl.addEventListener('change', () => { segDrafts = readSegs(); renderSegs(); });
+      const ref = { minEl, secEl, spdEl, kind: s.kind || 'effort' };
+      // clamp typed values on blur and refresh the total
+      for (const el of [minEl, secEl, spdEl]) el.addEventListener('change', () => { segDrafts = readSegs(); renderSegs(); });
       const kindBtn = add('button', { className: `btn kind ${ref.kind}`, textContent: kindShort(ref.kind) }, row);
       kindBtn.addEventListener('click', () => { segDrafts = readSegs(); segDrafts[i].kind = cycleKind(segDrafts[i].kind); renderSegs(); });
       const del = add('button', { className: 'del-seg', textContent: '×' }, row);
       del.addEventListener('click', () => removeSegRow(i));
       segRows.push(ref);
     });
-    const total = readSegs().reduce((a, s) => a + s.minutes, 0);
-    const over = total > MAX_TOTAL_MIN;
+    const totalSec = readSegs().reduce((a, s) => a + s.seconds, 0);
+    const over = totalSec > MAX_TOTAL_SEC;
     els.builderDur.className = over ? 'proginfo warn' : 'proginfo';
     els.builderDur.textContent = over
-      ? `Durée ${total} min — max ${MAX_TOTAL_MIN} min (le tapis s'arrête à 60 min)`
-      : `Durée totale ${total} min · ${segDrafts.length} segment(s)`;
+      ? `Durée ${fmtTime(totalSec)} — max 60 min (le tapis s'arrête à 60 min)`
+      : `Durée totale ${fmtTime(totalSec)} · ${segDrafts.length} segment(s)`;
   }
   function saveBuilder() {
     segDrafts = readSegs(); // capture typed (clamped) values so a re-render keeps them
-    const total = segDrafts.reduce((a, s) => a + s.minutes, 0);
-    if (total > MAX_TOTAL_MIN) { renderSegs(); return; } // blocked: over 60 min (warning shown, values kept)
+    const total = segDrafts.reduce((a, s) => a + s.seconds, 0);
+    if (total > MAX_TOTAL_SEC) { renderSegs(); return; } // blocked: over 60 min (warning shown, values kept)
     addCustomWorkout({ id: editingId, name: els.builderName.value, segments: segDrafts });
     showWorkouts();
   }
 
   // Programmatic add/update (used by Save and by tests). DRY entry point.
   function addCustomWorkout({ id, name, segments }) {
-    const segs = (segments && segments.length ? segments : [{ minutes: 5, speed: 4, kind: 'effort' }])
-      .map((s) => ({ minutes: num(s.minutes, 1), speed: num(s.speed, 1), kind: s.kind || 'effort' }));
+    const segs = (segments && segments.length ? segments : [{ seconds: 300, speed: 4, kind: 'effort' }])
+      .map((s) => ({ seconds: clampDuration(0, s.seconds != null ? s.seconds : (s.minutes || 0) * 60), speed: clampSpeed(s.speed), kind: s.kind || 'effort' }));
     const w = saveCustom({ id: id || undefined, name: name || 'Ma séance', segments: segs }, { storage });
     refreshDropdown();
     selectProgram(w.id); // the new/edited workout becomes the chosen program

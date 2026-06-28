@@ -19,18 +19,24 @@ export function zoneForHr(hr, maxHr) {
   return 5;
 }
 
-// A program = ordered segments [{ minutes, speed, incline? }]. Free run = no program.
+// A program = ordered segments [{ seconds | minutes, speed, kind? }]. Duration is in SECONDS
+// (segDurationSec); `minutes` is still accepted for back-compat with older saved workouts.
+export function segDurationSec(s) {
+  if (!s) return 0;
+  if (s.seconds != null) return s.seconds;
+  return (s.minutes || 0) * 60;
+}
 export function segmentAt(program, elapsedSec) {
   if (!program || !program.segments || !program.segments.length) return null;
   let acc = 0;
   for (let i = 0; i < program.segments.length; i++) {
-    acc += program.segments[i].minutes * 60;
+    acc += segDurationSec(program.segments[i]);
     if (elapsedSec < acc) return { index: i, ...program.segments[i], total: program.segments.length };
   }
   return { index: program.segments.length, done: true, total: program.segments.length };
 }
 export function programDurationSec(program) {
-  return program && program.segments ? program.segments.reduce((s, x) => s + x.minutes * 60, 0) : 0;
+  return program && program.segments ? program.segments.reduce((s, x) => s + segDurationSec(x), 0) : 0;
 }
 
 export class WorkoutSession {

@@ -218,17 +218,17 @@ const deps = (over = {}) => ({
   api.els.addSeg.click();                      // 2 rows; new row defaults to 'recovery'
   api.els.builderName.value = 'Mon parcours';
   const inputsIn = (el) => (el.children || []).flatMap((c) => (c.tag === 'input' ? [c] : inputsIn(c)));
-  const inputs = inputsIn(api.els.segList);
-  inputs[0].value = '4'; inputs[1].value = '6';  // row1: 4 min @ 6
-  inputs[2].value = '2'; inputs[3].value = '3';  // row2: 2 min @ 3
+  const inputs = inputsIn(api.els.segList); // per row: [min, sec, speed]
+  inputs[0].value = '4'; inputs[1].value = '0'; inputs[2].value = '6';  // row1: 4min00 @ 6
+  inputs[3].value = '0'; inputs[4].value = '30'; inputs[5].value = '3'; // row2: 0min30 @ 3
   api.els.saveWorkout.click();
   assert.equal(api.state, 'workouts', 'save returns to the workouts page');
   const mine = loadCustom({ storage }).find((w) => w.name === 'Mon parcours');
   assert.ok(mine, 'workout persisted among the catalog');
   assert.deepEqual(mine.segments, [
-    { minutes: 4, speed: 6, kind: 'effort' },
-    { minutes: 2, speed: 3, kind: 'recovery' },
-  ], 'editable rows saved WITH effort/recovery kind (clamped/valid)');
+    { seconds: 240, speed: 6, kind: 'effort' },
+    { seconds: 30, speed: 3, kind: 'recovery' },
+  ], 'rows saved as SECONDS with effort/recovery kind (1s granularity)');
   // the page lists workouts (seeded starters + the new one); find ours by name and edit it
   const rowByName = (name) => api.els.workoutList.children.find((r) => r.className === 'hrow'
     && (r.children.find((c) => c.className === 'hrow-info')?.children || []).some((s) => s.textContent === name));
@@ -362,20 +362,20 @@ const deps = (over = {}) => ({
   api.els.demoBtn.click(); api.els.manageBtn.click(); api.els.newWorkoutBtn.click();
   api.els.builderName.value = 'Test clamp';
   const inputsIn = (el) => (el.children || []).flatMap((c) => (c.tag === 'input' ? [c] : inputsIn(c)));
-  let inputs = inputsIn(api.els.segList);
-  inputs[0].value = '3'; inputs[1].value = '86';   // speed 86 → clamp 8
+  let inputs = inputsIn(api.els.segList); // [min, sec, speed]
+  inputs[0].value = '3'; inputs[1].value = '0'; inputs[2].value = '86';   // speed 86 → clamp 8
   api.els.saveWorkout.click();
   let w = loadCustom({ storage }).find((x) => x.name === 'Test clamp');
   assert.equal(w.segments[0].speed, 8, 'typed 86 km/h clamped to 8');
-  // edit again: speed 0 → 1, minutes 0 → 1
+  // edit again: duration 0 → 1 s, speed 0 → 1
   const row = api.els.workoutList.children.find((r) => r.className === 'hrow' && (r.children.find((c) => c.className === 'hrow-info')?.children || []).some((s) => s.textContent === 'Test clamp'));
   row.children.find((c) => c.textContent === '✎').click();
   inputs = inputsIn(api.els.segList);
-  inputs[0].value = '0'; inputs[1].value = '0';
+  inputs[0].value = '0'; inputs[1].value = '0'; inputs[2].value = '0';
   api.els.saveWorkout.click();
   w = loadCustom({ storage }).find((x) => x.name === 'Test clamp');
-  assert.equal(w.segments[0].minutes, 1, 'minutes 0 → 1'); assert.equal(w.segments[0].speed, 1, 'speed 0 → 1');
-  ok('builder clamps speed to 1–8 and minutes ≥1 on typed input');
+  assert.equal(w.segments[0].seconds, 1, 'duration 0 → 1 s'); assert.equal(w.segments[0].speed, 1, 'speed 0 → 1');
+  ok('builder clamps speed to 1–8 and duration ≥1 s on typed input');
 }
 
 // 17. Total workout > 60 min is blocked at save (the belt auto-stops at 60).
@@ -385,10 +385,10 @@ const deps = (over = {}) => ({
   api.els.demoBtn.click(); api.els.manageBtn.click(); api.els.newWorkoutBtn.click();
   api.els.builderName.value = 'Trop long';
   const inputsIn = (el) => (el.children || []).flatMap((c) => (c.tag === 'input' ? [c] : inputsIn(c)));
-  // two 60-min segments → 120 min total
+  // two 60-min segments → 120 min total (per row: [min, sec, speed])
   api.els.addSeg.click();
   let inputs = inputsIn(api.els.segList);
-  inputs[0].value = '60'; inputs[2].value = '60';
+  inputs[0].value = '60'; inputs[1].value = '0'; inputs[3].value = '60'; inputs[4].value = '0';
   api.els.saveWorkout.click();
   assert.equal(api.state, 'builder', 'save blocked, stays on builder');
   assert.ok(!loadCustom({ storage }).some((x) => x.name === 'Trop long'), 'over-60 workout not saved');
