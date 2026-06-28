@@ -464,15 +464,17 @@ export function mount(doc, deps) {
     segRows = [];
     segDrafts.forEach((s, i) => {
       const row = add('div', { className: 'seg-row' }, els.segList);
-      add('span', { className: 'seg-i', textContent: `#${i + 1}` }, row);
-      const minEl = add('input', { className: 'inp tiny', type: 'number', value: s.minutes, placeholder: 'min' }, row);
-      add('span', { className: 'seg-x', textContent: 'min @' }, row);
-      const spdEl = add('input', { className: 'inp tiny', type: 'number', step: '0.1', value: s.speed, placeholder: 'km/h' }, row);
-      add('span', { className: 'seg-x', textContent: 'km/h' }, row);
+      add('span', { className: 'seg-i', textContent: `${i + 1}` }, row);
+      const f1 = add('span', { className: 'seg-field' }, row);
+      const minEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'numeric', value: s.minutes }, f1);
+      add('span', { className: 'seg-u', textContent: 'min' }, f1);
+      const f2 = add('span', { className: 'seg-field' }, row);
+      const spdEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'decimal', step: '0.1', value: s.speed }, f2);
+      add('span', { className: 'seg-u', textContent: 'km/h' }, f2);
       const ref = { minEl, spdEl, kind: s.kind || 'effort' };
-      const kindBtn = add('button', { className: `btn small kind ${ref.kind}`, textContent: kindShort(ref.kind) }, row);
+      const kindBtn = add('button', { className: `btn kind ${ref.kind}`, textContent: kindShort(ref.kind) }, row);
       kindBtn.addEventListener('click', () => { segDrafts = readSegs(); segDrafts[i].kind = cycleKind(segDrafts[i].kind); renderSegs(); });
-      const del = add('button', { className: 'btn small ghost', textContent: '×' }, row);
+      const del = add('button', { className: 'btn del-seg ghost', textContent: '×' }, row);
       del.addEventListener('click', () => removeSegRow(i));
       segRows.push(ref);
     });

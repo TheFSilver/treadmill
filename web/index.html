@@ -50,11 +50,16 @@
 
     .builder { display:flex; flex-direction:column; gap:8px; width:100%; max-width:420px; padding:14px; background:var(--card); border:1px solid var(--line); border-radius:16px; }
     .inp { font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#0e1320; color:var(--fg); width:100%; }
-    .inp.tiny { width:72px; text-align:center; }
-    .seg-list { color:var(--muted); font-size:.85rem; text-align:left; display:flex; flex-direction:column; gap:6px; }
-    .seg-row { display:flex; align-items:center; gap:6px; }
-    .seg-i { color:var(--muted); width:28px; }
-    .seg-x { color:var(--muted); font-size:.8rem; }
+    .seg-list { display:flex; flex-direction:column; gap:8px; }
+    /* aligned grid: # | minutes | speed | kind | delete */
+    .seg-row { display:grid; grid-template-columns: 16px 1fr 1fr 64px 30px; gap:8px; align-items:center; }
+    .seg-i { color:var(--muted); font-size:.8rem; text-align:center; }
+    .seg-field { display:flex; align-items:center; gap:5px; min-width:0; }
+    .seg-field .inp.tiny { width:100%; min-width:0; padding:9px 6px; text-align:center; font-variant-numeric:tabular-nums; }
+    .seg-u { color:var(--muted); font-size:.74rem; white-space:nowrap; }
+    .kind { padding:9px 6px; font-size:.76rem; }
+    .del-seg { padding:9px 0; font-size:1.1rem; line-height:1; color:var(--muted); background:transparent; border-color:transparent; }
+    .del-seg:active { color:var(--fg); }
     .field { display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .field-l { color:var(--muted); font-size:.88rem; }
     .field .inp { width:110px; text-align:center; }

@@ -217,7 +217,8 @@ const deps = (over = {}) => ({
   assert.equal(api.state, 'builder');
   api.els.addSeg.click();                      // 2 rows; new row defaults to 'recovery'
   api.els.builderName.value = 'Mon parcours';
-  const inputs = api.els.segList.children.flatMap((row) => row.children.filter((c) => c.tag === 'input'));
+  const inputsIn = (el) => (el.children || []).flatMap((c) => (c.tag === 'input' ? [c] : inputsIn(c)));
+  const inputs = inputsIn(api.els.segList);
   inputs[0].value = '4'; inputs[1].value = '6';  // row1: 4 min @ 6
   inputs[2].value = '2'; inputs[3].value = '3';  // row2: 2 min @ 3
   api.els.saveWorkout.click();
