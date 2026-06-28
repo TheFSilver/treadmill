@@ -16,9 +16,10 @@ import { createWakeLock } from './wakelock.js';
 const notifier = createNotifier();
 const wakeLock = createWakeLock();        // keep the screen on during a workout
 const settings = loadSettings();          // weight (fittrack synergy), maxHr, incline angles, goal
+const treadmill = new TreadmillConnection();
 
 const app = mount(document, {
-  treadmill: new TreadmillConnection(),     // FTMS (homeTro HM1) — Android Chrome
+  treadmill,                                // FTMS (homeTro HM1) — Android Chrome
   h10: new H10Connection(),                 // optional HR for zone training (resonance synergy)
   makeSession: (o) => new WorkoutSession(o),
   makeSimulator: makeTreadmillSimulator,
@@ -28,6 +29,8 @@ const app = mount(document, {
   positions: positionsFromSettings(settings),
   defaultProgramId: loadPref('program', 'free'),
   defaultPositionId: loadPref('position', 1),
+  saveScreen: (s) => savePref('screen', s),
+  lastScreen: loadPref('screen', null),
   goalKm: settings.goalKm,
   wakeLock,
   loadHistory: () => loadSessions().filter((s) => s.activity === 'treadmill'),
@@ -50,3 +53,9 @@ if ('serviceWorker' in navigator) {
     document.addEventListener('click', () => notifier.requestPermission(), { once: true });
   }).catch(() => {});
 }
+
+// After a refresh the BLE link is gone (Web Bluetooth limitation), but if the treadmill was
+// granted before we can reconnect WITHOUT the chooser. Try silently on load; if the browser
+// requires a gesture, the first tap on "Connecter" reconnects in one tap (no device picker)
+// and lands back on the page you were on.
+treadmill.hasKnownDevice().then((known) => { if (known) app.connectTreadmill(); }).catch(() => {});

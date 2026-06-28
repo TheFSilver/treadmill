@@ -18,6 +18,12 @@ const ZONE_LABELS = ['repos', 'Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
 const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const km = (m) => (m / 1000).toFixed(2);
 
+// HM1 limits: speed 1–8 km/h ; a single segment ≤ 60 min ; total workout ≤ 60 min (the belt
+// auto-stops at 60). Clamping keeps typed values valid (e.g. 86 → 8, 0 → 1).
+const SPEED_MIN = 1, SPEED_MAX = 8, SEG_MIN = 1, MAX_TOTAL_MIN = 60;
+const clampSpeed = (v) => clamp(Math.round(num(v, SPEED_MIN) * 10) / 10, SPEED_MIN, SPEED_MAX);
+const clampMinutes = (v) => clamp(Math.round(num(v, SEG_MIN)), SEG_MIN, MAX_TOTAL_MIN);
+
 export function mount(doc, deps) {
   const {
     treadmill, h10, makeSession = (o) => new WorkoutSession(o), makeSimulator,
@@ -25,6 +31,7 @@ export function mount(doc, deps) {
     weightKg: initWeight = 75, maxHr: initMaxHr = 190, positions: initPositions = DEFAULT_POSITIONS,
     defaultProgramId = 'free', defaultPositionId = 1,
     loadHistory = () => [], summarizeHistory = () => ({ total: 0, days: 0 }), deleteSession = () => {},
+    saveScreen = () => {}, lastScreen = null,
     todayTotals = () => ({ distanceM: 0, calories: 0, steps: 0 }), today = () => '',
     goalKm = 3, wakeLock = { request() {}, release() {} },
     quickSpeeds = [2, 4, 6, 8],
@@ -159,6 +166,22 @@ export function mount(doc, deps) {
     show(els.speedctl, state === 'active' && controllable);
     show(els.today, state === 'ready' || state === 'summary');
     for (const id in els.posButtons) els.posButtons[id].className = Number(id) === positionId ? 'pos on' : 'pos';
+    persistScreen();
+  }
+
+  // Remember the current page so a refresh can return to it after reconnect (BLE itself can't
+  // survive a reload — Web Bluetooth limitation — but the view can).
+  let lastPersisted = null;
+  function persistScreen() {
+    const keep = ['ready', 'workouts', 'settings', 'history'];
+    const s = keep.includes(state) ? state : null;
+    if (s && s !== lastPersisted) { lastPersisted = s; saveScreen(s); }
+  }
+  function restoreAfterConnect() {
+    if (lastScreen === 'workouts') return showWorkouts();
+    if (lastScreen === 'settings') return openSettings();
+    if (lastScreen === 'history') return showHistory();
+    state = 'ready'; render();
   }
 
   function selectProgram(id) { programId = id; els.dropdown.setValue(id, { silent: true }); onProgram(id); }
@@ -224,7 +247,7 @@ export function mount(doc, deps) {
       treadmill.onData = (parsed) => { latestFrame = parsed; };
       treadmill.onDisconnect = () => { if (state === 'active') { pauseWorkout(); els.status.textContent = 'Tapis déconnecté — séance en pause'; notifier.notify('Tapis déconnecté', { body: 'Séance mise en pause', vibration: [200] }); } };
       els.status.textContent = controllable ? 'Tapis connecté' : 'Tapis connecté (lecture seule)';
-      state = 'ready'; startLoop(); renderToday(); render();
+      startLoop(); renderToday(); restoreAfterConnect(); // land back on the screen we were on
     } catch (e) { els.status.textContent = 'Erreur : ' + e.message; render(); }
   }
   async function connectHr() {
@@ -433,7 +456,7 @@ export function mount(doc, deps) {
   }
 
   // --- speed control -----------------------------------------------------------------------
-  function setSpeed(v) { manualSpeed = clamp(v, 0.5, 8); if (isDemo && sim) sim.setTarget(manualSpeed); if (controllable) treadmill.setSpeed(manualSpeed).catch(() => {}); }
+  function setSpeed(v) { manualSpeed = clamp(v, SPEED_MIN, SPEED_MAX); if (isDemo && sim) sim.setTarget(manualSpeed); if (controllable) treadmill.setSpeed(manualSpeed).catch(() => {}); }
   function nudge(d) { setSpeed(Math.round((manualSpeed + d) * 10) / 10); } // fine 0.1 step
 
   // --- custom builder (its own screen; editable rows with effort/recovery kind) -------------
@@ -457,7 +480,7 @@ export function mount(doc, deps) {
   function addSegRow() { segDrafts = readSegs(); segDrafts.push({ minutes: 3, speed: 3, kind: 'recovery' }); renderSegs(); }
   function removeSegRow(i) { segDrafts = readSegs(); segDrafts.splice(i, 1); if (!segDrafts.length) segDrafts.push({ minutes: 5, speed: 4, kind: 'effort' }); renderSegs(); }
   function readSegs() {
-    return segRows.map((r) => ({ minutes: num(r.minEl.value, 1), speed: num(r.spdEl.value, 1), kind: r.kind }));
+    return segRows.map((r) => ({ minutes: clampMinutes(r.minEl.value), speed: clampSpeed(r.spdEl.value), kind: r.kind }));
   }
   function renderSegs() {
     if (els.segList.replaceChildren) els.segList.replaceChildren(); else if (els.segList.children) els.segList.children.length = 0;
@@ -472,18 +495,27 @@ export function mount(doc, deps) {
       const spdEl = add('input', { className: 'inp tiny', type: 'number', inputmode: 'decimal', step: '0.1', value: s.speed }, f2);
       add('span', { className: 'seg-u', textContent: 'km/h' }, f2);
       const ref = { minEl, spdEl, kind: s.kind || 'effort' };
+      // clamp typed values on blur (86 → 8, 0 → 1) and refresh the total
+      minEl.addEventListener('change', () => { segDrafts = readSegs(); renderSegs(); });
+      spdEl.addEventListener('change', () => { segDrafts = readSegs(); renderSegs(); });
       const kindBtn = add('button', { className: `btn kind ${ref.kind}`, textContent: kindShort(ref.kind) }, row);
       kindBtn.addEventListener('click', () => { segDrafts = readSegs(); segDrafts[i].kind = cycleKind(segDrafts[i].kind); renderSegs(); });
-      const del = add('button', { className: 'btn del-seg ghost', textContent: '×' }, row);
+      const del = add('button', { className: 'del-seg', textContent: '×' }, row);
       del.addEventListener('click', () => removeSegRow(i));
       segRows.push(ref);
     });
     const total = readSegs().reduce((a, s) => a + s.minutes, 0);
-    els.builderDur.textContent = `Durée totale ${total} min · ${segDrafts.length} segment(s)`;
+    const over = total > MAX_TOTAL_MIN;
+    els.builderDur.className = over ? 'proginfo warn' : 'proginfo';
+    els.builderDur.textContent = over
+      ? `Durée ${total} min — max ${MAX_TOTAL_MIN} min (le tapis s'arrête à 60 min)`
+      : `Durée totale ${total} min · ${segDrafts.length} segment(s)`;
   }
   function saveBuilder() {
-    const segs = readSegs().map((s) => ({ minutes: num(s.minutes, 1), speed: num(s.speed, 1), kind: s.kind }));
-    addCustomWorkout({ id: editingId, name: els.builderName.value, segments: segs });
+    segDrafts = readSegs(); // capture typed (clamped) values so a re-render keeps them
+    const total = segDrafts.reduce((a, s) => a + s.minutes, 0);
+    if (total > MAX_TOTAL_MIN) { renderSegs(); return; } // blocked: over 60 min (warning shown, values kept)
+    addCustomWorkout({ id: editingId, name: els.builderName.value, segments: segDrafts });
     showWorkouts();
   }
 

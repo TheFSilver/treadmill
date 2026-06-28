@@ -228,7 +228,7 @@ const deps = (over = {}) => ({
   assert.deepEqual(mine.segments, [
     { minutes: 4, speed: 6, kind: 'effort' },
     { minutes: 2, speed: 3, kind: 'recovery' },
-  ], 'editable rows saved WITH effort/recovery kind');
+  ], 'editable rows saved WITH effort/recovery kind (clamped/valid)');
   // the page lists workouts (seeded starters + the new one); find ours by name and edit it
   const rowByName = (name) => api.els.workoutList.children.find((r) => r.className === 'hrow'
     && (r.children.find((c) => c.className === 'hrow-info')?.children || []).some((s) => s.textContent === name));
@@ -353,6 +353,66 @@ const deps = (over = {}) => ({
   const list3 = api.els.summary.children.find((c) => c.className === 'hist-list');
   assert.equal(list3.children.length, 1, 'row removed after delete');
   ok('history: tap row → detail stats; trash → delete + re-render');
+}
+
+// 16. Builder input validation: typed values clamp to speed 1–8, minutes ≥1; total >60 blocks save.
+{
+  const storage = fakeStorage();
+  const api = mount(fakeDoc(), deps({ storage }));
+  api.els.demoBtn.click(); api.els.manageBtn.click(); api.els.newWorkoutBtn.click();
+  api.els.builderName.value = 'Test clamp';
+  const inputsIn = (el) => (el.children || []).flatMap((c) => (c.tag === 'input' ? [c] : inputsIn(c)));
+  let inputs = inputsIn(api.els.segList);
+  inputs[0].value = '3'; inputs[1].value = '86';   // speed 86 → clamp 8
+  api.els.saveWorkout.click();
+  let w = loadCustom({ storage }).find((x) => x.name === 'Test clamp');
+  assert.equal(w.segments[0].speed, 8, 'typed 86 km/h clamped to 8');
+  // edit again: speed 0 → 1, minutes 0 → 1
+  const row = api.els.workoutList.children.find((r) => r.className === 'hrow' && (r.children.find((c) => c.className === 'hrow-info')?.children || []).some((s) => s.textContent === 'Test clamp'));
+  row.children.find((c) => c.textContent === '✎').click();
+  inputs = inputsIn(api.els.segList);
+  inputs[0].value = '0'; inputs[1].value = '0';
+  api.els.saveWorkout.click();
+  w = loadCustom({ storage }).find((x) => x.name === 'Test clamp');
+  assert.equal(w.segments[0].minutes, 1, 'minutes 0 → 1'); assert.equal(w.segments[0].speed, 1, 'speed 0 → 1');
+  ok('builder clamps speed to 1–8 and minutes ≥1 on typed input');
+}
+
+// 17. Total workout > 60 min is blocked at save (the belt auto-stops at 60).
+{
+  const storage = fakeStorage();
+  const api = mount(fakeDoc(), deps({ storage }));
+  api.els.demoBtn.click(); api.els.manageBtn.click(); api.els.newWorkoutBtn.click();
+  api.els.builderName.value = 'Trop long';
+  const inputsIn = (el) => (el.children || []).flatMap((c) => (c.tag === 'input' ? [c] : inputsIn(c)));
+  // two 60-min segments → 120 min total
+  api.els.addSeg.click();
+  let inputs = inputsIn(api.els.segList);
+  inputs[0].value = '60'; inputs[2].value = '60';
+  api.els.saveWorkout.click();
+  assert.equal(api.state, 'builder', 'save blocked, stays on builder');
+  assert.ok(!loadCustom({ storage }).some((x) => x.name === 'Trop long'), 'over-60 workout not saved');
+  assert.ok(/max 60/i.test(api.els.builderDur.textContent), 'shows the 60-min warning');
+  ok('total > 60 min is blocked at save with a warning');
+}
+
+// 18. Refresh: a known device reconnects WITHOUT the chooser, landing on the last screen.
+{
+  let usedChooser = false, getDevicesCalled = false;
+  const known = { name: 'FS-8B1D77', addEventListener() {}, gatt: { connect: async () => ({ getPrimaryService: async () => ({ getCharacteristic: async (u) => (u === 0x2acd ? { addEventListener() {}, startNotifications: async () => {} } : { writeValueWithResponse: async () => {} }) }) }) } };
+  const bt = {
+    getDevices: async () => { getDevicesCalled = true; return [known]; },
+    requestDevice: async () => { usedChooser = true; return known; },
+  };
+  const { TreadmillConnection } = await import('./ftms-ble.js');
+  const conn = new TreadmillConnection(bt);
+  assert.equal(await conn.hasKnownDevice(), true, 'detects a previously-granted device');
+  const sched = manualScheduler();
+  const api = mount(fakeDoc(), deps({ treadmill: conn, lastScreen: 'workouts', schedule: sched.schedule, unschedule: sched.unschedule }));
+  await api.connectTreadmill();
+  assert.ok(getDevicesCalled && !usedChooser, 'reconnects via getDevices WITHOUT the chooser');
+  assert.equal(api.state, 'workouts', 'lands back on the last screen after reconnect');
+  ok('refresh: one-tap reconnect (no chooser) returns to the last screen');
 }
 
 console.log(`boot/integration: ${n} checks passed`);

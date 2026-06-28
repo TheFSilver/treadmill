@@ -18,12 +18,28 @@ export class TreadmillConnection {
 
   get supported() { return !!this.bluetooth; }
 
+  // A previously-granted FTMS/FS- device (no chooser). null if none or unsupported.
+  async findKnownDevice() {
+    if (!this.bluetooth || !this.bluetooth.getDevices) return null;
+    try {
+      const known = await this.bluetooth.getDevices();
+      return known.find((d) => /^FS-/i.test(d.name || '') || /hometro/i.test(d.name || '')) || null;
+    } catch { return null; }
+  }
+  async hasKnownDevice() { return !!(await this.findKnownDevice()); }
+
   async connect() {
     if (!this.bluetooth) throw new Error('Web Bluetooth non supporté — utilise Chrome (Android).');
-    this.device = await this.bluetooth.requestDevice({
-      filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }],
-      optionalServices: [FTMS_SERVICE],
-    });
+    // Reconnect a previously-granted device WITHOUT the chooser (one-tap after a refresh).
+    // (Web Bluetooth tears down the GATT link on reload — we can't keep it alive, but we can
+    //  skip the device picker.) Falls back to the picker on first use.
+    this.device = await this.findKnownDevice();
+    if (!this.device) {
+      this.device = await this.bluetooth.requestDevice({
+        filters: [{ services: [FTMS_SERVICE] }, { namePrefix: 'FS-' }],
+        optionalServices: [FTMS_SERVICE],
+      });
+    }
     if (this.device.addEventListener) {
       this.device.addEventListener('gattserverdisconnected', () => { this.connected = false; this.onDisconnect(); });
     }
