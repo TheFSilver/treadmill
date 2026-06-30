@@ -25,6 +25,18 @@ export function todayTotals(sessions, dateStr) {
   return t;
 }
 
+// Daily-goal progress in either unit. goal = { type:'km'|'steps', km, steps }; totals from
+// todayTotals. One pure helper → the UI just renders .label. DRY.
+export function goalProgress(goal, totals) {
+  const steps = goal.type === 'steps';
+  const target = steps ? (goal.steps || 0) : (goal.km || 0);
+  const current = steps ? (totals.steps || 0) : (totals.distanceM || 0) / 1000;
+  const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+  const unit = steps ? 'pas' : 'km';
+  const fmt = (v) => (steps ? Math.round(v) : Math.round(v * 100) / 100);
+  return { type: goal.type, target, current, pct, unit, done: pct >= 100, label: `${fmt(current)} / ${fmt(target)} ${unit} (${pct}%)` };
+}
+
 export function summary(sessions) {
   const days = new Set(sessions.map((s) => s.date)).size;
   const scored = sessions.map((s) => s.score && s.score.mean).filter((x) => typeof x === 'number');

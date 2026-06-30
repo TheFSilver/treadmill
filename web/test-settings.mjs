@@ -36,15 +36,16 @@ function fakeStorage() { const m = {}; return { getItem: (k) => (k in m ? m[k] :
   ok('coerces numeric strings, ignores empty/junk');
 }
 
-// Vest load (numeric) + meal times (string) persist; mealTimes is kept as a trimmed string.
+// Goal unit (km|steps) + meal times persist; string keys (goalType, mealTimes) kept as strings.
 {
   const storage = fakeStorage();
-  const m = saveSettings({ vestKg: '12', postMealNudge: 1, mealTimes: ' 12:30,19:30 ' }, { storage });
-  assert.equal(m.vestKg, 12, 'vest "12" → 12');
+  const m = saveSettings({ goalType: 'steps', goalSteps: '9000', postMealNudge: 1, mealTimes: ' 12:30,19:30 ' }, { storage });
+  assert.equal(m.goalType, 'steps', 'goalType kept as string');
+  assert.equal(m.goalSteps, 9000, 'goalSteps coerced to number');
   assert.equal(m.postMealNudge, 1);
-  assert.equal(m.mealTimes, '12:30,19:30', 'mealTimes kept as trimmed string');
-  assert.equal(loadSettings({ storage }).mealTimes, '12:30,19:30', 'string setting persisted');
-  ok('vest load + meal-time settings persist (string keys preserved)');
+  assert.equal(m.mealTimes, '12:30,19:30', 'mealTimes trimmed string');
+  assert.equal(loadSettings({ storage }).goalType, 'steps', 'string setting persisted');
+  ok('goal unit + meal-time settings persist (string keys preserved)');
 }
 
 // positionsFromSettings reflects the angles.

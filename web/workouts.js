@@ -3,8 +3,9 @@
 // gated "plans"; custom workouts replace its premium "design your own session". Custom CRUD
 // uses an injected storage so it's testable in Node and persists in localStorage in the app.
 
-// "Marche libre" is the one permanent default (free walk, no segments — nothing to edit).
-export const BUILTINS = [{ id: 'free', name: 'Marche libre', segments: null, builtin: true }];
+// "Séance libre" is the one permanent default (no segments — nothing to edit). Named "séance"
+// not "marche" because the HM1 reaches 8 km/h → you can run, not only walk.
+export const BUILTINS = [{ id: 'free', name: 'Séance libre', segments: null, builtin: true }];
 
 // Structured starter workouts. SEEDED as editable custom workouts on first run, so the user
 // can edit/delete them like their own (they expect all of these to be "their" workouts).

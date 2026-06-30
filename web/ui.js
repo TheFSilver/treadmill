@@ -12,6 +12,7 @@ import { parseTreadmillData } from './ftms-core.js';
 import { WorkoutSession, segDurationSec } from './session.js';
 import { getWorkout, allWorkouts, saveCustom, loadCustom, deleteCustom, ensureSeeded } from './workouts.js';
 import { DEFAULT_POSITIONS } from './incline.js';
+import { goalProgress } from './trend.js';
 import { createDropdown } from './dropdown.js';
 
 const ZONE_LABELS = ['repos', 'Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
@@ -34,13 +35,14 @@ export function mount(doc, deps) {
     loadHistory = () => [], summarizeHistory = () => ({ total: 0, days: 0 }), deleteSession = () => {},
     saveScreen = () => {}, lastScreen = null,
     todayTotals = () => ({ distanceM: 0, calories: 0, steps: 0 }), today = () => '',
-    goalKm = 3, wakeLock = { request() {}, release() {} },
+    goalKm = 3, goalSteps = 8000, goalType = 'km', wakeLock = { request() {}, release() {} },
     quickSpeeds = [2, 4, 6, 8],
     schedule = (fn, ms) => setInterval(fn, ms), unschedule = (id) => clearInterval(id),
   } = deps;
 
   // Mutable settings (editable in the Réglages screen, applied to the next workout).
-  let curWeight = initWeight, curVest = initVest, curMaxHr = initMaxHr, curPositions = initPositions, curGoalKm = goalKm;
+  let curWeight = initWeight, curVest = initVest, curMaxHr = initMaxHr, curPositions = initPositions;
+  let curGoalKm = goalKm, curGoalSteps = goalSteps, curGoalType = goalType;
 
   ensureSeeded({ storage }); // seed starter workouts as editable entries on first run
 
@@ -65,6 +67,13 @@ export function mount(doc, deps) {
   els.posButtons = {};
   buildPositionButtons();
 
+  // Weighted vest — a PER-SESSION choice (asked before each run, not buried in settings). Quick
+  // picks; the value feeds the calorie math. Remembered between sessions via onVest.
+  els.vestRow = add('div', { id: 'vest', className: 'incline-row' });
+  add('span', { className: 'incline-label', textContent: 'Veste lestée' }, els.vestRow);
+  els.vestButtons = {};
+  buildVestButtons();
+
   // Workouts management page (create / edit / delete custom workouts).
   els.workouts = add('div', { id: 'workouts', className: 'workouts', hidden: true });
   add('div', { className: 'sum-title', textContent: 'Mes séances' }, els.workouts);
@@ -85,11 +94,17 @@ export function mount(doc, deps) {
   els.settings = add('div', { id: 'settings', className: 'builder', hidden: true });
   add('div', { className: 'sum-title', textContent: 'Réglages' }, els.settings);
   els.setWeight = labeledInput(els.settings, 'Poids (kg)', curWeight);
-  els.setVest = labeledInput(els.settings, 'Gilet lesté (kg, 0 = aucun)', curVest);
   els.setMaxHr = labeledInput(els.settings, 'FC max (bpm)', curMaxHr);
   els.setPos1 = labeledInput(els.settings, 'Angle Position 1 (°)', degOf(curPositions, 1));
   els.setPos2 = labeledInput(els.settings, 'Angle Position 2 (°)', degOf(curPositions, 2));
-  els.setGoal = labeledInput(els.settings, 'Objectif quotidien (km)', curGoalKm);
+  // Daily goal: pick the unit (km or pas), one value field that follows the chosen unit.
+  els.goalTypeRow = add('div', { className: 'incline-row' }, els.settings);
+  add('span', { className: 'incline-label', textContent: 'Objectif quotidien' }, els.goalTypeRow);
+  els.goalKmBtn = add('button', { className: 'pos', textContent: 'km' }, els.goalTypeRow);
+  els.goalStepsBtn = add('button', { className: 'pos', textContent: 'pas' }, els.goalTypeRow);
+  els.setGoal = labeledInput(els.settings, 'Valeur', curGoalType === 'steps' ? curGoalSteps : curGoalKm);
+  els.goalKmBtn.addEventListener('click', () => setGoalType('km'));
+  els.goalStepsBtn.addEventListener('click', () => setGoalType('steps'));
   els.saveSettings = add('button', { className: 'btn primary small', textContent: 'Enregistrer' }, els.settings);
 
   // Live metrics.
@@ -140,7 +155,7 @@ export function mount(doc, deps) {
   let programId = defaultProgramId, positionId = defaultPositionId;
   let latestFrame = {}, lastHr = null, lastTargetSpeed = null, manualSpeed = 4;
   let session = null, lastSummary = null, segDrafts = [];
-  let onFinish = () => {}, onProgram = () => {}, onPosition = () => {}, onSettings = () => {};
+  let onFinish = () => {}, onProgram = () => {}, onPosition = () => {}, onSettings = () => {}, onVest = () => {};
 
   // --- render: single source of visibility -------------------------------------------------
   function show(el, on) { el.hidden = !on; }
@@ -150,8 +165,9 @@ export function mount(doc, deps) {
     show(els.builder, state === 'builder');
     show(els.summary, state === 'summary' || state === 'history' || state === 'detail');
     show(els.settings, state === 'settings');
-    // incline SELECTOR only on 'ready' (manual incline = chosen before the run, locked during)
+    // incline + vest SELECTORS only on 'ready' (chosen before each run)
     show(els.inclineRow, state === 'ready');
+    show(els.vestRow, state === 'ready');
     show(els.connectBtn, state === 'idle');
     show(els.demoBtn, state === 'idle');
     show(els.hrBtn, state === 'idle' || (state === 'ready' && !hrConnected));
@@ -188,6 +204,26 @@ export function mount(doc, deps) {
 
   function selectProgram(id) { programId = id; els.dropdown.setValue(id, { silent: true }); onProgram(id); }
   function setPosition(id) { positionId = id; if (session) session.setPosition(id); onPosition(id); render(); }
+  // Per-session weighted vest (kg). 0 = none. Persisted via onVest so the last choice is remembered.
+  function setVest(kg) { curVest = Math.max(0, kg); if (session) session.vestKg = curVest; onVest(curVest); highlightVest(); }
+  function highlightVest() { for (const k in els.vestButtons) els.vestButtons[k].className = Number(k) === curVest ? 'pos on' : 'pos'; }
+  function buildVestButtons() {
+    if (els.vestRow.replaceChildren) els.vestRow.replaceChildren(); else if (els.vestRow.children) els.vestRow.children.length = 0;
+    add('span', { className: 'incline-label', textContent: 'Veste lestée' }, els.vestRow);
+    els.vestButtons = {};
+    for (const kg of [0, 4, 8, 12]) {
+      els.vestButtons[kg] = add('button', { className: 'pos', textContent: kg === 0 ? 'Aucune' : `${kg} kg` }, els.vestRow);
+      els.vestButtons[kg].addEventListener('click', () => setVest(kg));
+    }
+    highlightVest();
+  }
+  // Daily-goal unit toggle (km / pas): swap the value field to the chosen unit's stored value.
+  function setGoalType(type) {
+    curGoalType = type;
+    els.setGoal.value = type === 'steps' ? curGoalSteps : curGoalKm;
+    els.goalKmBtn.className = type === 'km' ? 'pos on' : 'pos';
+    els.goalStepsBtn.className = type === 'steps' ? 'pos on' : 'pos';
+  }
 
   // --- live loop ---------------------------------------------------------------------------
   function getFrame() {
@@ -234,10 +270,8 @@ export function mount(doc, deps) {
 
   function renderToday() {
     const t = todayTotals(loadHistory(), today());
-    const goalM = curGoalKm * 1000;
-    const pct = goalM ? Math.min(100, Math.round((t.distanceM / goalM) * 100)) : 0;
-    const done = pct >= 100 ? ' ✅' : '';
-    els.today.textContent = `Aujourd'hui · ${km(t.distanceM)} / ${curGoalKm} km (${pct}%)${done} · ${t.calories} kcal · ${t.steps} pas`;
+    const g = goalProgress({ type: curGoalType, km: curGoalKm, steps: curGoalSteps }, t);
+    els.today.textContent = `Aujourd'hui · ${g.label}${g.done ? ' ✅' : ''} · ${t.calories} kcal · ${t.steps} pas`;
   }
 
   // --- connect / demo ----------------------------------------------------------------------
@@ -418,24 +452,24 @@ export function mount(doc, deps) {
   function openSettings() {
     prevState = state === 'settings' ? prevState : state;
     els.setWeight.value = curWeight;
-    els.setVest.value = curVest;
     els.setMaxHr.value = curMaxHr;
     els.setPos1.value = degOf(curPositions, 1);
     els.setPos2.value = degOf(curPositions, 2);
+    setGoalType(curGoalType); // sets toggle highlight + value field to the active unit
     state = 'settings'; render();
   }
   function applySettings() {
     const weightKg = num(els.setWeight.value, curWeight);
-    const vestKg = Math.max(0, num(els.setVest.value, curVest));
     const maxHr = num(els.setMaxHr.value, curMaxHr);
     const pos1Deg = num(els.setPos1.value, degOf(curPositions, 1));
     const pos2Deg = num(els.setPos2.value, degOf(curPositions, 2));
-    const goalKmV = num(els.setGoal.value, curGoalKm);
-    curWeight = weightKg; curVest = vestKg; curMaxHr = maxHr; curGoalKm = goalKmV;
+    const goalVal = num(els.setGoal.value, curGoalType === 'steps' ? curGoalSteps : curGoalKm);
+    curWeight = weightKg; curMaxHr = maxHr;
+    if (curGoalType === 'steps') curGoalSteps = goalVal; else curGoalKm = goalVal;
     curPositions = [{ id: 1, label: 'Position 1', degrees: pos1Deg }, { id: 2, label: 'Position 2', degrees: pos2Deg }];
     buildPositionButtons();
-    if (session) { session.weightKg = curWeight; session.vestKg = curVest; session.maxHr = curMaxHr; session.positions = curPositions; }
-    onSettings({ weightKg, vestKg, maxHr, pos1Deg, pos2Deg, goalKm: goalKmV });
+    if (session) { session.weightKg = curWeight; session.maxHr = curMaxHr; session.positions = curPositions; }
+    onSettings({ weightKg, maxHr, pos1Deg, pos2Deg, goalKm: curGoalKm, goalSteps: curGoalSteps, goalType: curGoalType });
     renderToday();
     goBack();
   }
@@ -571,11 +605,12 @@ export function mount(doc, deps) {
 
   return {
     els, connectTreadmill, connectHr, startDemo, startWorkout, stopWorkout, disconnect,
-    selectProgram, setPosition, setSpeed, addCustomWorkout, showHistory, showSessionDetail, deleteSessionRow, goBack, openSettings, applySettings,
+    selectProgram, setPosition, setVest, setSpeed, addCustomWorkout, showHistory, showSessionDetail, deleteSessionRow, goBack, openSettings, applySettings,
     showWorkouts, startBuilder, saveBuilder, pauseWorkout, resumeWorkout,
     setStreak(t) { els.streak.textContent = t; },
-    set onFinish(fn) { onFinish = fn; }, set onProgram(fn) { onProgram = fn; }, set onPosition(fn) { onPosition = fn; }, set onSettings(fn) { onSettings = fn; },
-    get weightKg() { return curWeight; }, get maxHr() { return curMaxHr; }, get positions() { return curPositions; },
+    set onFinish(fn) { onFinish = fn; }, set onProgram(fn) { onProgram = fn; }, set onPosition(fn) { onPosition = fn; }, set onSettings(fn) { onSettings = fn; }, set onVest(fn) { onVest = fn; },
+    get weightKg() { return curWeight; }, get vestKg() { return curVest; }, get maxHr() { return curMaxHr; }, get positions() { return curPositions; },
+    get goalType() { return curGoalType; }, get goalKm() { return curGoalKm; }, get goalSteps() { return curGoalSteps; },
     get state() { return state; }, get programId() { return programId; }, get positionId() { return positionId; },
     get manualSpeed() { return manualSpeed; }, get lastSummary() { return lastSummary; }, get controllable() { return controllable; },
   };

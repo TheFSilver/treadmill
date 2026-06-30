@@ -26,7 +26,7 @@ const app = mount(document, {
   makeSimulator: makeTreadmillSimulator,
   notifier,
   weightKg: settings.weightKg,
-  vestKg: settings.vestKg,
+  vestKg: loadPref('vest', 0),               // per-session vest, remembered (not a setting)
   maxHr: settings.maxHr,
   positions: positionsFromSettings(settings),
   defaultProgramId: loadPref('program', 'free'),
@@ -34,6 +34,8 @@ const app = mount(document, {
   saveScreen: (s) => savePref('screen', s),
   lastScreen: loadPref('screen', null),
   goalKm: settings.goalKm,
+  goalSteps: settings.goalSteps,
+  goalType: settings.goalType,
   wakeLock,
   loadHistory: () => loadSessions().filter((s) => s.activity === 'treadmill'),
   summarizeHistory,
@@ -44,7 +46,8 @@ const app = mount(document, {
 
 app.onProgram = (id) => savePref('program', id);
 app.onPosition = (id) => savePref('position', id);
-app.onSettings = (partial) => saveSettings(partial);   // weight/maxHr/incline angles persisted
+app.onSettings = (partial) => saveSettings(partial);   // weight/maxHr/incline/goal persisted
+app.onVest = (kg) => savePref('vest', kg);             // remember the last vest choice
 
 // Shared habit layer: every modality (weigh, breathe, walk) feeds ONE streak (compound).
 app.setStreak(streakText(loadStreak()));

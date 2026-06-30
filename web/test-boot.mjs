@@ -191,13 +191,13 @@ const deps = (over = {}) => ({
   // open settings from idle
   api.els.settingsBtn.click();
   assert.equal(api.state, 'settings');
-  api.els.setWeight.value = '100'; api.els.setVest.value = '10'; api.els.setMaxHr.value = '180';
+  api.els.setWeight.value = '100'; api.els.setMaxHr.value = '180';
   api.els.setPos1.value = '2'; api.els.setPos2.value = '8';
   api.els.saveSettings.click();
   assert.equal(api.state, 'idle', 'Back to where we came from after saving');
   assert.equal(api.weightKg, 100, 'weight applied');
   assert.equal(api.positions[1].degrees, 8, 'incline angle applied');
-  assert.deepEqual(saved, { weightKg: 100, vestKg: 10, maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3 }, 'persisted via onSettings (incl. vest)');
+  assert.deepEqual(saved, { weightKg: 100, maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (no vest — vest is per-session)');
   // heavier weight → more calories in a demo run
   api.els.demoBtn.click(); api.els.startBtn.click(); sched.run(60);
   const kcalHeavy = Number(api.els.mKcal.textContent.replace(/\D/g, ''));
@@ -315,7 +315,7 @@ const deps = (over = {}) => ({
     goalKm: 3, loadHistory: () => history, todayTotals: (s, d) => ({ distanceM: 1500, calories: 80, steps: 2000 }), today: () => '2026-06-28',
   }));
   api.els.connectBtn.click(); await new Promise((r) => setTimeout(r, 0));
-  assert.ok(/1\.50 \/ 3 km/.test(api.els.today.textContent) && /50%/.test(api.els.today.textContent), `today progress: ${api.els.today.textContent}`);
+  assert.ok(/1\.5 \/ 3 km/.test(api.els.today.textContent) && /50%/.test(api.els.today.textContent), `today progress: ${api.els.today.textContent}`);
   // disconnect-safety: a drop during an active workout auto-pauses
   api.els.startBtn.click(); assert.equal(api.state, 'active');
   t.conn.onDisconnect();
@@ -413,6 +413,36 @@ const deps = (over = {}) => ({
   assert.ok(getDevicesCalled && !usedChooser, 'reconnects via getDevices WITHOUT the chooser');
   assert.equal(api.state, 'workouts', 'lands back on the last screen after reconnect');
   ok('refresh: one-tap reconnect (no chooser) returns to the last screen');
+}
+
+// 14. Weighted vest is a PER-SESSION choice on the ready screen (not in settings); it flows into
+//     the session and is remembered via onVest.
+{
+  let vestSaved = null;
+  const api = mount(fakeDoc(), deps({}));
+  api.onVest = (kg) => { vestSaved = kg; };
+  api.els.demoBtn.click();                       // → ready (pre-session screen)
+  assert.equal(api.state, 'ready');
+  assert.equal(api.els.vestRow.hidden, false, 'vest selector shown before the session');
+  api.els.vestButtons[8].click();                // pick 8 kg
+  assert.equal(api.vestKg, 8, 'vest applied per-session');
+  assert.equal(vestSaved, 8, 'vest remembered via onVest');
+  ok('vest is chosen before each session (ready screen) and remembered');
+}
+
+// 15. Daily goal can be set in STEPS, persisted, and shown in the unit chosen.
+{
+  let saved = null;
+  const api = mount(fakeDoc(), deps({}));
+  api.onSettings = (s) => { saved = s; };
+  api.els.settingsBtn.click();
+  api.els.goalStepsBtn.click();                   // switch unit to "pas"
+  api.els.setGoal.value = '9000';
+  api.els.saveSettings.click();
+  assert.equal(saved.goalType, 'steps', 'goal unit persisted as steps');
+  assert.equal(saved.goalSteps, 9000, 'goal value stored in steps');
+  assert.ok(/pas/.test(api.els.today.textContent), 'today line shows the goal in pas');
+  ok('daily goal switches to steps, persists, and displays in pas');
 }
 
 console.log(`boot/integration: ${n} checks passed`);
