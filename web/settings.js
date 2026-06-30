@@ -2,8 +2,8 @@
 // storage-injected → testable in Node, persisted in localStorage in the app. Weight feeds the
 // calorie math (fittrack synergy); the angles calibrate the FitShow dead-angle.
 
-export const DEFAULTS = { weightKg: 80, maxHr: 190, strideM: 0.71, pos1Deg: 1, pos2Deg: 4, goalKm: 3, goalSteps: 8000, goalType: 'km', postMealNudge: 0, mealTimes: '12:30,19:30' };
-const STRING_KEYS = ['mealTimes', 'goalType']; // non-numeric settings (vest is per-session, not here)
+export const DEFAULTS = { weightKg: 80, heightCm: 0, birthdate: '', sex: 'M', maxHr: 190, strideM: 0.71, pos1Deg: 1, pos2Deg: 4, goalKm: 3, goalSteps: 8000, goalType: 'km', postMealNudge: 0, mealTimes: '12:30,19:30' };
+const STRING_KEYS = ['mealTimes', 'goalType', 'birthdate', 'sex']; // non-numeric (vest is per-session, not here)
 const KEY = 'treadmill.settings';
 const mem = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; })();
 function store(s) { return s || (typeof localStorage !== 'undefined' ? localStorage : mem); }

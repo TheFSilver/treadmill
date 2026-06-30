@@ -197,7 +197,7 @@ const deps = (over = {}) => ({
   assert.equal(api.state, 'idle', 'Back to where we came from after saving');
   assert.equal(api.weightKg, 100, 'weight applied');
   assert.equal(api.positions[1].degrees, 8, 'incline angle applied');
-  assert.deepEqual(saved, { weightKg: 100, maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (no vest — vest is per-session)');
+  assert.deepEqual(saved, { weightKg: 100, heightCm: 0, birthdate: '', sex: 'M', maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (profile incl., no vest — vest is per-session)');
   // heavier weight → more calories in a demo run
   api.els.demoBtn.click(); api.els.startBtn.click(); sched.run(60);
   const kcalHeavy = Number(api.els.mKcal.textContent.replace(/\D/g, ''));
@@ -419,15 +419,17 @@ const deps = (over = {}) => ({
 //     the session and is remembered via onVest.
 {
   let vestSaved = null;
-  const api = mount(fakeDoc(), deps({}));
+  const sched = manualScheduler();
+  const api = mount(fakeDoc(), deps({ schedule: sched.schedule, unschedule: sched.unschedule }));
   api.onVest = (kg) => { vestSaved = kg; };
-  api.els.demoBtn.click();                       // → ready (pre-session screen)
+  api.els.demoBtn.click();                        // → ready (pre-session screen)
   assert.equal(api.state, 'ready');
-  assert.equal(api.els.vestRow.hidden, false, 'vest selector shown before the session');
-  api.els.vestButtons[8].click();                // pick 8 kg
-  assert.equal(api.vestKg, 8, 'vest applied per-session');
-  assert.equal(vestSaved, 8, 'vest remembered via onVest');
-  ok('vest is chosen before each session (ready screen) and remembered');
+  assert.equal(api.els.vestRow.hidden, false, 'vest field shown before the session');
+  api.els.vestInput.value = '10,5';              // free decimal, comma accepted
+  api.els.startBtn.click();                       // vest read at start
+  assert.equal(api.vestKg, 10.5, 'vest parsed (comma) + applied per-session');
+  assert.equal(vestSaved, 10.5, 'vest remembered via onVest');
+  ok('vest is a free numeric field (0–40, decimals/comma), read at start + remembered');
 }
 
 // 15. Daily goal can be set in STEPS, persisted, and shown in the unit chosen.
@@ -443,6 +445,29 @@ const deps = (over = {}) => ({
   assert.equal(saved.goalSteps, 9000, 'goal value stored in steps');
   assert.ok(/pas/.test(api.els.today.textContent), 'today line shows the goal in pas');
   ok('daily goal switches to steps, persists, and displays in pas');
+}
+
+// 16. Profile (height / birthdate / sex) persists via onSettings — feeds stride + Keytel.
+{
+  let saved = null;
+  const api = mount(fakeDoc(), deps({}));
+  api.onSettings = (s) => { saved = s; };
+  api.els.settingsBtn.click();
+  api.els.setHeight.value = '178';
+  api.els.setBirthdate.value = '1986-06-01';
+  api.els.sexFBtn.click();                        // pick Femme
+  api.els.saveSettings.click();
+  assert.equal(saved.heightCm, 178); assert.equal(saved.birthdate, '1986-06-01'); assert.equal(saved.sex, 'F');
+  ok('profile (height/birthdate/sex) persists for stride + Keytel');
+}
+
+// 17. Incline dropdown reflects the chosen position (degree + %).
+{
+  const api = mount(fakeDoc(), deps({}));
+  api.els.demoBtn.click();
+  api.setPosition(2);
+  assert.equal(String(api.els.inclineDropdown.value), '2', 'dropdown follows the chosen incline');
+  ok('incline is a dropdown (angle + %) that reflects the selection');
 }
 
 console.log(`boot/integration: ${n} checks passed`);

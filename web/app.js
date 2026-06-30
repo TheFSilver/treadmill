@@ -26,6 +26,9 @@ const app = mount(document, {
   makeSimulator: makeTreadmillSimulator,
   notifier,
   weightKg: settings.weightKg,
+  heightCm: settings.heightCm,               // → default stride (steps)
+  birthdate: settings.birthdate,             // → age (Keytel HR-calories + Tanaka HRmax)
+  sex: settings.sex,                         // → Keytel
   vestKg: loadPref('vest', 0),               // per-session vest, remembered (not a setting)
   maxHr: settings.maxHr,
   positions: positionsFromSettings(settings),

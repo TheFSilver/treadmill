@@ -4,7 +4,8 @@
 // and, if a program is set, the current target speed/incline (= FitShow's premium "custom
 // workouts" / "plans", free). Pure + injected deps → fully testable.
 
-import { kcalPerMin, gradeForPosition, gradeAdjustedSpeed, mets } from './incline.js';
+import { gradeForPosition, gradeAdjustedSpeed, mets } from './incline.js';
+import { kcalPerMinAuto } from './physio.js';
 
 // HR zones as fractions of max HR (Z1..Z5). zoneForHr → 0 (below) .. 5.
 export function maxHrFromAge(age) { return 208 - 0.7 * age; }
@@ -40,9 +41,10 @@ export function programDurationSec(program) {
 }
 
 export class WorkoutSession {
-  constructor({ weightKg = 75, vestKg = 0, positionId = 1, positions, maxHr = 190, program = null, strideM = 0.71 } = {}) {
+  constructor({ weightKg = 75, vestKg = 0, age = null, sex = 'M', positionId = 1, positions, maxHr = 190, program = null, strideM = 0.71 } = {}) {
     this.weightKg = weightKg;
     this.vestKg = vestKg;        // weighted-vest load (kg) → folded into the calorie math
+    this.age = age; this.sex = sex; // unlock Keytel HR-calories when an H10 feeds hr
     this.positionId = positionId;
     this.positions = positions;
     this.maxHr = maxHr;
@@ -76,8 +78,9 @@ export class WorkoutSession {
     this.gaDistanceM += (gradeAdjustedSpeed(speed, this.grade) * 1000 / 3600) * dtSec;
     this.steps += deltaM / this.strideM; // step estimate from belt distance / stride length
 
-    // Calories OUR way: grade + weight + optional vest (ignore the treadmill's flat figure).
-    this.calories += kcalPerMin(speed, this.grade, this.weightKg, this.vestKg) * (dtSec / 60);
+    // Calories OUR way: Keytel (HR + age + sex) when an H10 is feeding hr — it captures the real
+    // effort incl. incline & vest; else ACSM (grade + weight + vest). Ignore the treadmill figure.
+    this.calories += kcalPerMinAuto({ speedKmh: speed, gradePct: this.grade, weightKg: this.weightKg, vestKg: this.vestKg, hr, age: this.age, sex: this.sex }) * (dtSec / 60);
 
     if (hr) {
       this.peakHr = Math.max(this.peakHr, hr);

@@ -25,6 +25,15 @@ let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
   ok('weighted vest raises session calories');
 }
 
+// With age+sex AND an HR feed, calories use the Keytel HR model (≠ ACSM-only) — the H10 upgrade.
+{
+  const acsm = new WorkoutSession({ weightKg: 80, positionId: 2, positions: [{ id: 2, grade: 7 }] });
+  const keytel = new WorkoutSession({ weightKg: 80, age: 40, sex: 'M', positionId: 2, positions: [{ id: 2, grade: 7 }] });
+  for (let t = 0; t < 600; t++) { acsm.update({ speed: 5 }); keytel.update({ speed: 5 }, 150); } // keytel fed HR=150
+  assert.ok(keytel.calories > 0 && Math.abs(keytel.calories - acsm.calories) > 1, 'HR+age → Keytel diverges from ACSM');
+  ok('Keytel HR-calories engage when age/sex + an H10 HR are present');
+}
+
 // Grade-adjusted distance exceeds raw distance on an incline.
 {
   const s = new WorkoutSession({ positionId: 2 }); // default pos2 = 6%
