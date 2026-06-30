@@ -31,6 +31,7 @@ const app = mount(document, {
   sex: settings.sex,                         // → Keytel
   vestKg: loadPref('vest', 0),               // per-session vest, remembered (not a setting)
   maxHr: settings.maxHr,
+  maxHrAuto: settings.maxHrAuto,             // FC max from age (Tanaka) until real H10 data
   positions: positionsFromSettings(settings),
   defaultProgramId: loadPref('program', 'free'),
   defaultPositionId: loadPref('position', 1),

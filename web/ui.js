@@ -13,7 +13,7 @@ import { WorkoutSession, segDurationSec } from './session.js';
 import { getWorkout, allWorkouts, saveCustom, loadCustom, deleteCustom, ensureSeeded } from './workouts.js';
 import { DEFAULT_POSITIONS, gradeFromDegrees } from './incline.js';
 import { goalProgress } from './trend.js';
-import { ageFromBirthdate, strideFromHeight } from './physio.js';
+import { ageFromBirthdate, strideFromHeight, maxHrFromAge } from './physio.js';
 import { createDropdown } from './dropdown.js';
 
 const ZONE_LABELS = ['repos', 'Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
@@ -37,7 +37,7 @@ export function mount(doc, deps) {
     saveScreen = () => {}, lastScreen = null,
     todayTotals = () => ({ distanceM: 0, calories: 0, steps: 0 }), today = () => '',
     goalKm = 3, goalSteps = 8000, goalType = 'km', wakeLock = { request() {}, release() {} },
-    heightCm: initHeight = 0, birthdate: initBirthdate = '', sex: initSex = 'M', now = () => Date.now(),
+    heightCm: initHeight = 0, birthdate: initBirthdate = '', sex: initSex = 'M', maxHrAuto: initMaxHrAuto = 1, now = () => Date.now(),
     quickSpeeds = [2, 4, 6, 8],
     schedule = (fn, ms) => setInterval(fn, ms), unschedule = (id) => clearInterval(id),
   } = deps;
@@ -45,7 +45,7 @@ export function mount(doc, deps) {
   // Mutable settings (editable in the Réglages screen, applied to the next workout).
   let curWeight = initWeight, curVest = initVest, curMaxHr = initMaxHr, curPositions = initPositions;
   let curGoalKm = goalKm, curGoalSteps = goalSteps, curGoalType = goalType;
-  let curHeight = initHeight, curBirthdate = initBirthdate, curSex = initSex;
+  let curHeight = initHeight, curBirthdate = initBirthdate, curSex = initSex, curMaxHrAuto = !!initMaxHrAuto;
 
   ensureSeeded({ storage }); // seed starter workouts as editable entries on first run
 
@@ -93,9 +93,12 @@ export function mount(doc, deps) {
   els.saveWorkout = add('button', { className: 'btn primary small', textContent: 'Enregistrer' }, els.builder);
   els.cancelWorkout = add('button', { className: 'btn ghost small', textContent: 'Annuler' }, els.builder);
 
-  // Settings screen (Réglages).
+  // Settings screen (Réglages) — split into Profil / Tapis / Objectif sections (the Profil block
+  // is a cohesive unit, extractable to its own page when the apps unify into one ecosystem).
   els.settings = add('div', { id: 'settings', className: 'builder', hidden: true });
   add('div', { className: 'sum-title', textContent: 'Réglages' }, els.settings);
+
+  add('div', { className: 'set-section', textContent: 'Profil' }, els.settings);
   els.setWeight = labeledInput(els.settings, 'Poids (kg)', curWeight);
   els.setHeight = labeledInput(els.settings, 'Taille (cm)', curHeight || '');
   els.setBirthdate = labeledInput(els.settings, 'Date de naissance', curBirthdate, 'date');
@@ -105,9 +108,18 @@ export function mount(doc, deps) {
   els.sexFBtn = add('button', { className: 'pos', textContent: 'Femme' }, els.sexRow);
   els.sexMBtn.addEventListener('click', () => setSex('M'));
   els.sexFBtn.addEventListener('click', () => setSex('F'));
-  els.setMaxHr = labeledInput(els.settings, 'FC max (bpm)', curMaxHr);
+
+  add('div', { className: 'set-section', textContent: 'Tapis' }, els.settings);
   els.setPos1 = labeledInput(els.settings, 'Angle Position 1 (°)', degOf(curPositions, 1));
   els.setPos2 = labeledInput(els.settings, 'Angle Position 2 (°)', degOf(curPositions, 2));
+  // FC max: Auto (Tanaka 208−0,7·âge) until real H10 data, or Manuel override.
+  els.maxHrRow = add('div', { className: 'incline-row' }, els.settings);
+  add('span', { className: 'incline-label', textContent: 'FC max (bpm)' }, els.maxHrRow);
+  els.maxHrAutoBtn = add('button', { className: 'pos', textContent: 'Auto (âge)' }, els.maxHrRow);
+  els.setMaxHr = add('input', { id: 'setMaxHr', className: 'inp num2', type: 'number', value: curMaxHr }, els.maxHrRow);
+  els.maxHrAutoBtn.addEventListener('click', () => setMaxHrAuto(!curMaxHrAuto));
+
+  add('div', { className: 'set-section', textContent: 'Objectif' }, els.settings);
   // Daily goal: pick the unit (km or pas), one value field that follows the chosen unit.
   els.goalTypeRow = add('div', { className: 'incline-row' }, els.settings);
   add('span', { className: 'incline-label', textContent: 'Objectif quotidien' }, els.goalTypeRow);
@@ -221,6 +233,14 @@ export function mount(doc, deps) {
   function readVest() { curVest = clamp(parseDec(els.vestInput.value), 0, 50); onVest(curVest); return curVest; }
   function setSex(s) { curSex = s === 'F' ? 'F' : 'M'; els.sexMBtn.className = curSex === 'M' ? 'pos on' : 'pos'; els.sexFBtn.className = curSex === 'F' ? 'pos on' : 'pos'; }
   function curAge() { return ageFromBirthdate(curBirthdate, now()); }
+  // Effective FC max: Auto = Tanaka from age (fallback to stored), else the manual value.
+  function effMaxHr() { return curMaxHrAuto ? (maxHrFromAge(curAge()) || curMaxHr) : curMaxHr; }
+  function setMaxHrAuto(on) {
+    curMaxHrAuto = !!on;
+    els.maxHrAutoBtn.className = curMaxHrAuto ? 'pos on' : 'pos';
+    els.setMaxHr.disabled = curMaxHrAuto;
+    els.setMaxHr.value = curMaxHrAuto ? effMaxHr() : curMaxHr;
+  }
   // Daily-goal unit toggle (km / pas): swap the value field to the chosen unit's stored value.
   function setGoalType(type) {
     curGoalType = type;
@@ -259,7 +279,7 @@ export function mount(doc, deps) {
     els.target.textContent = r.targetSpeed != null ? `${kindLabel} · objectif ${r.targetSpeed} km/h` : '';
     els.mTime.textContent = `⏱ ${fmtTime(r.elapsedSec)}`;
     els.mDist.textContent = `📏 ${km(r.distanceM)} km`;
-    els.mKcal.textContent = `🔥 ${Math.round(r.calories)} kcal`;
+    els.mKcal.textContent = `🔥 ${Math.round(r.calories)} kcal${r.keytel ? ' ❤️' : ''}`; // ❤️ = HR-based (Keytel)
     els.mSteps.textContent = `👣 ${r.steps}`;
     els.mHr.textContent = r.hr ? `♥ ${r.hr} · ${ZONE_LABELS[r.zone]}` : '♥ —';
     // program progress bar + remaining + next step (premium feel)
@@ -302,7 +322,7 @@ export function mount(doc, deps) {
   // --- workout lifecycle -------------------------------------------------------------------
   function startWorkout() {
     const w = getWorkout(programId, { storage });
-    session = makeSession({ weightKg: curWeight, vestKg: readVest(), age: curAge(), sex: curSex, positionId, positions: curPositions, maxHr: curMaxHr, strideM: strideFromHeight(curHeight) || 0.71, program: w.segments ? w : null });
+    session = makeSession({ weightKg: curWeight, vestKg: readVest(), age: curAge(), sex: curSex, positionId, positions: curPositions, maxHr: effMaxHr(), strideM: strideFromHeight(curHeight) || 0.71, program: w.segments ? w : null });
     lastTargetSpeed = null; state = 'active';
     if (isDemo && sim) sim.start();
     if (controllable) treadmill.start && treadmill.start().catch(() => {});
@@ -459,27 +479,27 @@ export function mount(doc, deps) {
     els.setHeight.value = curHeight || '';
     els.setBirthdate.value = curBirthdate || '';
     setSex(curSex);
-    els.setMaxHr.value = curMaxHr;
     els.setPos1.value = degOf(curPositions, 1);
     els.setPos2.value = degOf(curPositions, 2);
-    setGoalType(curGoalType); // sets toggle highlight + value field to the active unit
+    setMaxHrAuto(curMaxHrAuto); // sets the Auto button + the FC max field (computed or manual)
+    setGoalType(curGoalType);   // sets toggle highlight + value field to the active unit
     state = 'settings'; render();
   }
   function applySettings() {
     const weightKg = num(els.setWeight.value, curWeight);
     const heightCm = num(els.setHeight.value, curHeight);
     const birthdate = String(els.setBirthdate.value || '').trim();
-    const maxHr = num(els.setMaxHr.value, curMaxHr);
     const pos1Deg = num(els.setPos1.value, degOf(curPositions, 1));
     const pos2Deg = num(els.setPos2.value, degOf(curPositions, 2));
     const goalVal = num(els.setGoal.value, curGoalType === 'steps' ? curGoalSteps : curGoalKm);
-    curWeight = weightKg; curHeight = heightCm; curBirthdate = birthdate; curMaxHr = maxHr; // curSex set by toggle
+    curWeight = weightKg; curHeight = heightCm; curBirthdate = birthdate; // curSex/curMaxHrAuto via toggles
+    if (!curMaxHrAuto) curMaxHr = num(els.setMaxHr.value, curMaxHr); // only store manual edits
     if (curGoalType === 'steps') curGoalSteps = goalVal; else curGoalKm = goalVal;
     curPositions = [{ id: 1, label: 'Position 1', degrees: pos1Deg }, { id: 2, label: 'Position 2', degrees: pos2Deg }];
     els.inclineDropdown.setItems(inclineItems());
     els.inclineDropdown.setValue(String(positionId), { silent: true });
-    if (session) { session.weightKg = curWeight; session.age = curAge(); session.sex = curSex; session.strideM = strideFromHeight(curHeight) || 0.71; session.maxHr = curMaxHr; session.positions = curPositions; }
-    onSettings({ weightKg, heightCm, birthdate, sex: curSex, maxHr, pos1Deg, pos2Deg, goalKm: curGoalKm, goalSteps: curGoalSteps, goalType: curGoalType });
+    if (session) { session.weightKg = curWeight; session.age = curAge(); session.sex = curSex; session.strideM = strideFromHeight(curHeight) || 0.71; session.maxHr = effMaxHr(); session.positions = curPositions; }
+    onSettings({ weightKg, heightCm, birthdate, sex: curSex, maxHr: curMaxHr, maxHrAuto: curMaxHrAuto ? 1 : 0, pos1Deg, pos2Deg, goalKm: curGoalKm, goalSteps: curGoalSteps, goalType: curGoalType });
     renderToday();
     goBack();
   }
@@ -599,7 +619,7 @@ export function mount(doc, deps) {
     return add('input', { className: 'inp', type, value }, row);
   }
 
-  selectProgram(programId); setPosition(positionId); setSex(curSex); render();
+  selectProgram(programId); setPosition(positionId); setSex(curSex); setMaxHrAuto(curMaxHrAuto); render();
 
   return {
     els, connectTreadmill, connectHr, startDemo, startWorkout, stopWorkout, disconnect,
@@ -607,7 +627,7 @@ export function mount(doc, deps) {
     showWorkouts, startBuilder, saveBuilder, pauseWorkout, resumeWorkout,
     setStreak(t) { els.streak.textContent = t; },
     set onFinish(fn) { onFinish = fn; }, set onProgram(fn) { onProgram = fn; }, set onPosition(fn) { onPosition = fn; }, set onSettings(fn) { onSettings = fn; }, set onVest(fn) { onVest = fn; },
-    get weightKg() { return curWeight; }, get vestKg() { return curVest; }, get maxHr() { return curMaxHr; }, get positions() { return curPositions; },
+    get weightKg() { return curWeight; }, get vestKg() { return curVest; }, get maxHr() { return effMaxHr(); }, get positions() { return curPositions; },
     get goalType() { return curGoalType; }, get goalKm() { return curGoalKm; }, get goalSteps() { return curGoalSteps; },
     get state() { return state; }, get programId() { return programId; }, get positionId() { return positionId; },
     get manualSpeed() { return manualSpeed; }, get lastSummary() { return lastSummary; }, get controllable() { return controllable; },

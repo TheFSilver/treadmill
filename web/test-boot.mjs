@@ -191,13 +191,15 @@ const deps = (over = {}) => ({
   // open settings from idle
   api.els.settingsBtn.click();
   assert.equal(api.state, 'settings');
-  api.els.setWeight.value = '100'; api.els.setMaxHr.value = '180';
+  api.els.setWeight.value = '100';
+  api.els.maxHrAutoBtn.click();                 // turn OFF auto to set FC max manually
+  api.els.setMaxHr.value = '180';
   api.els.setPos1.value = '2'; api.els.setPos2.value = '8';
   api.els.saveSettings.click();
   assert.equal(api.state, 'idle', 'Back to where we came from after saving');
   assert.equal(api.weightKg, 100, 'weight applied');
   assert.equal(api.positions[1].degrees, 8, 'incline angle applied');
-  assert.deepEqual(saved, { weightKg: 100, heightCm: 0, birthdate: '', sex: 'M', maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (profile incl., no vest — vest is per-session)');
+  assert.deepEqual(saved, { weightKg: 100, heightCm: 0, birthdate: '', sex: 'M', maxHr: 180, maxHrAuto: 0, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (sections: profil/tapis/objectif)');
   // heavier weight → more calories in a demo run
   api.els.demoBtn.click(); api.els.startBtn.click(); sched.run(60);
   const kcalHeavy = Number(api.els.mKcal.textContent.replace(/\D/g, ''));
@@ -468,6 +470,23 @@ const deps = (over = {}) => ({
   api.setPosition(2);
   assert.equal(String(api.els.inclineDropdown.value), '2', 'dropdown follows the chosen incline');
   ok('incline is a dropdown (angle + %) that reflects the selection');
+}
+
+// 18. FC max defaults to Tanaka (208−0.7·age) from the birthdate while Auto is on; manual override
+//     once Auto is turned off.
+{
+  const NOW = Date.UTC(2026, 5, 30);
+  const api = mount(fakeDoc(), deps({ now: () => NOW }));
+  api.els.settingsBtn.click();
+  api.els.setBirthdate.value = '1986-06-01';     // ~40 yo at NOW
+  api.els.saveSettings.click();
+  assert.equal(api.maxHr, 180, 'Auto FC max = 208 − 0.7·40 = 180');
+  api.els.settingsBtn.click();
+  api.els.maxHrAutoBtn.click();                   // → manual
+  api.els.setMaxHr.value = '175';
+  api.els.saveSettings.click();
+  assert.equal(api.maxHr, 175, 'manual override applies when Auto is off');
+  ok('FC max: Auto from age (Tanaka), manual override available');
 }
 
 console.log(`boot/integration: ${n} checks passed`);

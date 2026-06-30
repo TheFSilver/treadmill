@@ -80,6 +80,7 @@ export class WorkoutSession {
 
     // Calories OUR way: Keytel (HR + age + sex) when an H10 is feeding hr — it captures the real
     // effort incl. incline & vest; else ACSM (grade + weight + vest). Ignore the treadmill figure.
+    this.usingKeytel = !!(hr && this.age);
     this.calories += kcalPerMinAuto({ speedKmh: speed, gradePct: this.grade, weightKg: this.weightKg, vestKg: this.vestKg, hr, age: this.age, sex: this.sex }) * (dtSec / 60);
 
     if (hr) {
@@ -102,6 +103,7 @@ export class WorkoutSession {
       distanceM: this.distanceM,
       gaDistanceM: this.gaDistanceM,
       calories: this.calories,
+      keytel: this.usingKeytel,
       steps: Math.round(this.steps),
       maxSpeed: this.maxSpeed,
       mets: mets(speed, this.grade),
