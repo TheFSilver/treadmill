@@ -33,7 +33,7 @@ const sessions = [
   const g = goalProgress({ type: 'km', km: 3, steps: 8000 }, { distanceM: 1500, steps: 2000 });
   assert.equal(g.unit, 'km'); assert.equal(g.target, 3); assert.equal(g.current, 1.5);
   assert.equal(g.pct, 50); assert.equal(g.done, false);
-  assert.ok(g.label.includes('1.5 / 3 km') && g.label.includes('50%'));
+  assert.ok(g.label.includes('1,5 / 3 km') && g.label.includes('50%'));
   ok('goalProgress (km): % of distance toward the km target');
 }
 // Daily goal in STEPS: progress vs steps; reaching it marks done.

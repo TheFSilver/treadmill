@@ -69,7 +69,7 @@ const deps = (over = {}) => ({
   assert.equal(api.els.metrics.hidden, true, 'no chrono/metrics before Démarrer');
   assert.equal(api.els.startBtn.hidden, false, 'Démarrer shown');
   t.conn.onData(parseFrame({ speed: 3.2 })); sched.run(1);
-  assert.equal(api.els.speed.textContent, '3.2', 'ready shows live belt speed (preview)');
+  assert.equal(api.els.speed.textContent, '3,2', 'ready shows live belt speed (preview, FR decimal)');
   ok('connect → ready (chrono does NOT start); live speed preview works');
 }
 
@@ -192,14 +192,13 @@ const deps = (over = {}) => ({
   api.els.settingsBtn.click();
   assert.equal(api.state, 'settings');
   api.els.setWeight.value = '100';
-  api.els.maxHrAutoBtn.click();                 // turn OFF auto to set FC max manually
-  api.els.setMaxHr.value = '180';
+  api.els.setMaxHr.value = '180';               // FC max single field (a value = manual override)
   api.els.setPos1.value = '2'; api.els.setPos2.value = '8';
   api.els.saveSettings.click();
   assert.equal(api.state, 'idle', 'Back to where we came from after saving');
   assert.equal(api.weightKg, 100, 'weight applied');
   assert.equal(api.positions[1].degrees, 8, 'incline angle applied');
-  assert.deepEqual(saved, { weightKg: 100, heightCm: 0, birthdate: '', sex: 'M', maxHr: 180, maxHrAuto: 0, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (sections: profil/tapis/objectif)');
+  assert.deepEqual(saved, { weightKg: 100, heightCm: 0, birthdate: '', sex: 'M', maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3, goalSteps: 8000, goalType: 'km' }, 'persisted via onSettings (sections: profil/tapis/objectif)');
   // heavier weight → more calories in a demo run
   api.els.demoBtn.click(); api.els.startBtn.click(); sched.run(60);
   const kcalHeavy = Number(api.els.mKcal.textContent.replace(/\D/g, ''));
@@ -317,7 +316,7 @@ const deps = (over = {}) => ({
     goalKm: 3, loadHistory: () => history, todayTotals: (s, d) => ({ distanceM: 1500, calories: 80, steps: 2000 }), today: () => '2026-06-28',
   }));
   api.els.connectBtn.click(); await new Promise((r) => setTimeout(r, 0));
-  assert.ok(/1\.5 \/ 3 km/.test(api.els.today.textContent) && /50%/.test(api.els.today.textContent), `today progress: ${api.els.today.textContent}`);
+  assert.ok(/1,5 \/ 3 km/.test(api.els.today.textContent) && /50%/.test(api.els.today.textContent), `today progress: ${api.els.today.textContent}`);
   // disconnect-safety: a drop during an active workout auto-pauses
   api.els.startBtn.click(); assert.equal(api.state, 'active');
   t.conn.onDisconnect();
@@ -440,7 +439,7 @@ const deps = (over = {}) => ({
   const api = mount(fakeDoc(), deps({}));
   api.onSettings = (s) => { saved = s; };
   api.els.settingsBtn.click();
-  api.els.goalStepsBtn.click();                   // switch unit to "pas"
+  api.els.goalDropdown.setValue('steps');           // switch unit to pas
   api.els.setGoal.value = '9000';
   api.els.saveSettings.click();
   assert.equal(saved.goalType, 'steps', 'goal unit persisted as steps');
@@ -457,7 +456,7 @@ const deps = (over = {}) => ({
   api.els.settingsBtn.click();
   api.els.setHeight.value = '178';
   api.els.setBirthdate.value = '1986-06-01';
-  api.els.sexFBtn.click();                        // pick Femme
+  api.els.sexDropdown.setValue('F');               // pick Femme
   api.els.saveSettings.click();
   assert.equal(saved.heightCm, 178); assert.equal(saved.birthdate, '1986-06-01'); assert.equal(saved.sex, 'F');
   ok('profile (height/birthdate/sex) persists for stride + Keytel');
@@ -482,7 +481,6 @@ const deps = (over = {}) => ({
   api.els.saveSettings.click();
   assert.equal(api.maxHr, 180, 'Auto FC max = 208 − 0.7·40 = 180');
   api.els.settingsBtn.click();
-  api.els.maxHrAutoBtn.click();                   // → manual
   api.els.setMaxHr.value = '175';
   api.els.saveSettings.click();
   assert.equal(api.maxHr, 175, 'manual override applies when Auto is off');

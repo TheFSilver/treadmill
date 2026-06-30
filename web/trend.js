@@ -33,7 +33,7 @@ export function goalProgress(goal, totals) {
   const current = steps ? (totals.steps || 0) : (totals.distanceM || 0) / 1000;
   const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
   const unit = steps ? 'pas' : 'km';
-  const fmt = (v) => (steps ? Math.round(v) : Math.round(v * 100) / 100);
+  const fmt = (v) => (steps ? String(Math.round(v)) : String(Math.round(v * 100) / 100).replace('.', ',')); // French decimal
   return { type: goal.type, target, current, pct, unit, done: pct >= 100, label: `${fmt(current)} / ${fmt(target)} ${unit} (${pct}%)` };
 }
 

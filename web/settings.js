@@ -2,7 +2,8 @@
 // storage-injected → testable in Node, persisted in localStorage in the app. Weight feeds the
 // calorie math (fittrack synergy); the angles calibrate the FitShow dead-angle.
 
-export const DEFAULTS = { weightKg: 80, heightCm: 0, birthdate: '', sex: 'M', maxHr: 190, maxHrAuto: 1, pos1Deg: 1, pos2Deg: 4, goalKm: 3, goalSteps: 8000, goalType: 'km', postMealNudge: 0, mealTimes: '12:30,19:30' };
+// maxHr = 0 means "auto from age" (Tanaka); any value > 0 is a manual override.
+export const DEFAULTS = { weightKg: 80, heightCm: 0, birthdate: '', sex: 'M', maxHr: 0, pos1Deg: 1, pos2Deg: 4, goalKm: 3, goalSteps: 8000, goalType: 'km', postMealNudge: 0, mealTimes: '12:30,19:30' };
 const STRING_KEYS = ['mealTimes', 'goalType', 'birthdate', 'sex']; // non-numeric (vest is per-session, not here)
 const KEY = 'treadmill.settings';
 const mem = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; })();

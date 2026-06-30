@@ -18,7 +18,8 @@ import { createDropdown } from './dropdown.js';
 
 const ZONE_LABELS = ['repos', 'Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
 const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const km = (m) => (m / 1000).toFixed(2);
+const km = (m) => (m / 1000).toFixed(2).replace('.', ',');   // French decimal
+const fr1 = (n) => Number(n || 0).toFixed(1).replace('.', ',');
 
 // HM1 limits: speed 1–8 km/h ; segment duration 1 s … 60 min ; total workout ≤ 60 min (belt
 // auto-stops at 60). Clamping keeps typed values valid (e.g. 86 → 8, 0 s → 1 s).
@@ -31,13 +32,13 @@ export function mount(doc, deps) {
   const {
     treadmill, h10, makeSession = (o) => new WorkoutSession(o), makeSimulator,
     notifier = { notify() {}, buzz() {} }, storage,
-    weightKg: initWeight = 75, vestKg: initVest = 0, maxHr: initMaxHr = 190, positions: initPositions = DEFAULT_POSITIONS,
+    weightKg: initWeight = 75, vestKg: initVest = 0, maxHr: initMaxHr = 0, positions: initPositions = DEFAULT_POSITIONS,
     defaultProgramId = 'free', defaultPositionId = 1,
     loadHistory = () => [], summarizeHistory = () => ({ total: 0, days: 0 }), deleteSession = () => {},
     saveScreen = () => {}, lastScreen = null,
     todayTotals = () => ({ distanceM: 0, calories: 0, steps: 0 }), today = () => '',
     goalKm = 3, goalSteps = 8000, goalType = 'km', wakeLock = { request() {}, release() {} },
-    heightCm: initHeight = 0, birthdate: initBirthdate = '', sex: initSex = 'M', maxHrAuto: initMaxHrAuto = 1, now = () => Date.now(),
+    heightCm: initHeight = 0, birthdate: initBirthdate = '', sex: initSex = 'M', now = () => Date.now(),
     quickSpeeds = [2, 4, 6, 8],
     schedule = (fn, ms) => setInterval(fn, ms), unschedule = (id) => clearInterval(id),
   } = deps;
@@ -45,7 +46,7 @@ export function mount(doc, deps) {
   // Mutable settings (editable in the Réglages screen, applied to the next workout).
   let curWeight = initWeight, curVest = initVest, curMaxHr = initMaxHr, curPositions = initPositions;
   let curGoalKm = goalKm, curGoalSteps = goalSteps, curGoalType = goalType;
-  let curHeight = initHeight, curBirthdate = initBirthdate, curSex = initSex, curMaxHrAuto = !!initMaxHrAuto;
+  let curHeight = initHeight, curBirthdate = initBirthdate, curSex = initSex;
 
   ensureSeeded({ storage }); // seed starter workouts as editable entries on first run
 
@@ -74,7 +75,7 @@ export function mount(doc, deps) {
   // Weighted vest — a PER-SESSION choice (asked before each run, not buried in settings). Free
   // numeric input 0–40 kg, decimals + comma accepted (e.g. 10,5). Read at start, fed to calories.
   els.vestRow = add('div', { id: 'vest', className: 'incline-row' });
-  add('span', { className: 'incline-label', textContent: 'Veste lestée (kg)' }, els.vestRow);
+  add('span', { className: 'incline-label', textContent: 'Veste lestée (kg, 0–50)' }, els.vestRow);
   els.vestInput = add('input', { id: 'vestInput', className: 'inp num2', type: 'text', inputMode: 'decimal', maxLength: 4, placeholder: '0', value: initVest || '' }, els.vestRow);
 
   // Workouts management page (create / edit / delete custom workouts).
@@ -102,32 +103,19 @@ export function mount(doc, deps) {
   els.setWeight = labeledInput(els.settings, 'Poids (kg)', curWeight);
   els.setHeight = labeledInput(els.settings, 'Taille (cm)', curHeight || '');
   els.setBirthdate = labeledInput(els.settings, 'Date de naissance', curBirthdate, 'date');
-  els.sexRow = add('div', { className: 'incline-row' }, els.settings);
-  add('span', { className: 'incline-label', textContent: 'Genre' }, els.sexRow);
-  els.sexMBtn = add('button', { className: 'pos', textContent: 'Homme' }, els.sexRow);
-  els.sexFBtn = add('button', { className: 'pos', textContent: 'Femme' }, els.sexRow);
-  els.sexMBtn.addEventListener('click', () => setSex('M'));
-  els.sexFBtn.addEventListener('click', () => setSex('F'));
+  els.sexDropdown = createDropdown(doc, { items: [{ id: 'M', label: 'Homme' }, { id: 'F', label: 'Femme' }], onSelect: (id) => { curSex = id === 'F' ? 'F' : 'M'; } });
+  labeledControl(els.settings, 'Genre', els.sexDropdown.el);
 
   add('div', { className: 'set-section', textContent: 'Tapis' }, els.settings);
   els.setPos1 = labeledInput(els.settings, 'Angle Position 1 (°)', degOf(curPositions, 1));
   els.setPos2 = labeledInput(els.settings, 'Angle Position 2 (°)', degOf(curPositions, 2));
-  // FC max: Auto (Tanaka 208−0,7·âge) until real H10 data, or Manuel override.
-  els.maxHrRow = add('div', { className: 'incline-row' }, els.settings);
-  add('span', { className: 'incline-label', textContent: 'FC max (bpm)' }, els.maxHrRow);
-  els.maxHrAutoBtn = add('button', { className: 'pos', textContent: 'Auto (âge)' }, els.maxHrRow);
-  els.setMaxHr = add('input', { id: 'setMaxHr', className: 'inp num2', type: 'number', value: curMaxHr }, els.maxHrRow);
-  els.maxHrAutoBtn.addEventListener('click', () => setMaxHrAuto(!curMaxHrAuto));
+  // FC max: a single field. Empty = Auto from age (Tanaka, shown as placeholder); a value = manual.
+  els.setMaxHr = labeledInput(els.settings, 'FC max (bpm)', curMaxHr || '');
 
   add('div', { className: 'set-section', textContent: 'Objectif' }, els.settings);
-  // Daily goal: pick the unit (km or pas), one value field that follows the chosen unit.
-  els.goalTypeRow = add('div', { className: 'incline-row' }, els.settings);
-  add('span', { className: 'incline-label', textContent: 'Objectif quotidien' }, els.goalTypeRow);
-  els.goalKmBtn = add('button', { className: 'pos', textContent: 'km' }, els.goalTypeRow);
-  els.goalStepsBtn = add('button', { className: 'pos', textContent: 'pas' }, els.goalTypeRow);
+  els.goalDropdown = createDropdown(doc, { items: [{ id: 'km', label: 'km' }, { id: 'steps', label: 'pas' }], onSelect: (id) => setGoalType(id) });
+  labeledControl(els.settings, 'Objectif quotidien', els.goalDropdown.el);
   els.setGoal = labeledInput(els.settings, 'Valeur', curGoalType === 'steps' ? curGoalSteps : curGoalKm);
-  els.goalKmBtn.addEventListener('click', () => setGoalType('km'));
-  els.goalStepsBtn.addEventListener('click', () => setGoalType('steps'));
   els.saveSettings = add('button', { className: 'btn primary small', textContent: 'Enregistrer' }, els.settings);
 
   // Live metrics.
@@ -145,6 +133,7 @@ export function mount(doc, deps) {
   els.mKcal = add('div', { className: 'm', textContent: '' }, els.live);
   els.mSteps = add('div', { className: 'm', textContent: '' }, els.live);
   els.mHr = add('div', { className: 'm', textContent: '' }, els.live);
+  els.mVest = add('div', { className: 'm', textContent: '' }, els.live); // shown only when a vest is worn
 
   // Summary screen.
   els.summary = add('div', { id: 'summary', className: 'summary', hidden: true });
@@ -231,22 +220,23 @@ export function mount(doc, deps) {
   function pctStr(deg) { return gradeFromDegrees(deg).toFixed(1).replace('.', ',') + ' %'; }
   // Per-session weighted vest: read the free numeric field (0–40 kg, comma OK) at start; persist.
   function readVest() { curVest = clamp(parseDec(els.vestInput.value), 0, 50); onVest(curVest); return curVest; }
-  function setSex(s) { curSex = s === 'F' ? 'F' : 'M'; els.sexMBtn.className = curSex === 'M' ? 'pos on' : 'pos'; els.sexFBtn.className = curSex === 'F' ? 'pos on' : 'pos'; }
+  function setSex(s) { curSex = s === 'F' ? 'F' : 'M'; els.sexDropdown.setValue(curSex, { silent: true }); }
   function curAge() { return ageFromBirthdate(curBirthdate, now()); }
-  // Effective FC max: Auto = Tanaka from age (fallback to stored), else the manual value.
-  function effMaxHr() { return curMaxHrAuto ? (maxHrFromAge(curAge()) || curMaxHr) : curMaxHr; }
-  function setMaxHrAuto(on) {
-    curMaxHrAuto = !!on;
-    els.maxHrAutoBtn.className = curMaxHrAuto ? 'pos on' : 'pos';
-    els.setMaxHr.disabled = curMaxHrAuto;
-    els.setMaxHr.value = curMaxHrAuto ? effMaxHr() : curMaxHr;
-  }
-  // Daily-goal unit toggle (km / pas): swap the value field to the chosen unit's stored value.
+  function autoMaxHr() { return maxHrFromAge(curAge()) || 190; }       // Tanaka, fallback 190
+  // Effective FC max: a manual value (>0) wins, else Auto from age.
+  function effMaxHr() { return curMaxHr > 0 ? curMaxHr : autoMaxHr(); }
+  // Daily-goal unit dropdown (km / pas): swap the value field to the chosen unit's stored value.
   function setGoalType(type) {
-    curGoalType = type;
-    els.setGoal.value = type === 'steps' ? curGoalSteps : curGoalKm;
-    els.goalKmBtn.className = type === 'km' ? 'pos on' : 'pos';
-    els.goalStepsBtn.className = type === 'steps' ? 'pos on' : 'pos';
+    curGoalType = type === 'steps' ? 'steps' : 'km';
+    els.setGoal.value = curGoalType === 'steps' ? curGoalSteps : curGoalKm;
+    els.goalDropdown.setValue(curGoalType, { silent: true });
+  }
+  // A label + a control (input or dropdown) on one .field row → right-aligned like every field.
+  function labeledControl(parent, label, controlEl) {
+    const row = add('div', { className: 'field' }, parent);
+    add('span', { className: 'field-l', textContent: label }, row);
+    row.appendChild(controlEl);
+    return row;
   }
 
   // --- live loop ---------------------------------------------------------------------------
@@ -265,14 +255,14 @@ export function mount(doc, deps) {
       paintActive(r);
       if (r.done) finishWorkout();
     } else { // ready preview: show live belt speed only
-      els.speed.textContent = ((parsed && parsed.speed) || 0).toFixed(1);
+      els.speed.textContent = fr1((parsed && parsed.speed) || 0);
     }
   }
   function startLoop() { if (!timer) timer = schedule(loopTick, 1000); }
   function stopLoop() { if (timer) { unschedule(timer); timer = null; } }
 
   function paintActive(r) {
-    els.speed.textContent = r.speed.toFixed(1);
+    els.speed.textContent = fr1(r.speed);
     const pos = curPositions.find((p) => p.id === positionId);
     els.inclineActive.textContent = pos ? `⛰ ${pos.label} (${pos.degrees}° · ${pctStr(pos.degrees)})` : '';
     const kindLabel = r.segmentKind === 'recovery' ? 'récup' : r.segmentKind === 'warmup' ? 'échauffement' : 'effort';
@@ -280,6 +270,7 @@ export function mount(doc, deps) {
     els.mTime.textContent = `⏱ ${fmtTime(r.elapsedSec)}`;
     els.mDist.textContent = `📏 ${km(r.distanceM)} km`;
     els.mKcal.textContent = `🔥 ${Math.round(r.calories)} kcal${r.keytel ? ' ❤️' : ''}`; // ❤️ = HR-based (Keytel)
+    els.mVest.textContent = curVest > 0 ? `🎽 ${fr1(curVest)} kg` : ''; // weighted-vest load, when worn
     els.mSteps.textContent = `👣 ${r.steps}`;
     els.mHr.textContent = r.hr ? `♥ ${r.hr} · ${ZONE_LABELS[r.zone]}` : '♥ —';
     // program progress bar + remaining + next step (premium feel)
@@ -481,8 +472,9 @@ export function mount(doc, deps) {
     setSex(curSex);
     els.setPos1.value = degOf(curPositions, 1);
     els.setPos2.value = degOf(curPositions, 2);
-    setMaxHrAuto(curMaxHrAuto); // sets the Auto button + the FC max field (computed or manual)
-    setGoalType(curGoalType);   // sets toggle highlight + value field to the active unit
+    els.setMaxHr.value = curMaxHr || '';                 // empty = auto
+    els.setMaxHr.placeholder = `auto : ${autoMaxHr()}`;  // show the age-based value
+    setGoalType(curGoalType);                            // sets dropdown + value field
     state = 'settings'; render();
   }
   function applySettings() {
@@ -492,14 +484,14 @@ export function mount(doc, deps) {
     const pos1Deg = num(els.setPos1.value, degOf(curPositions, 1));
     const pos2Deg = num(els.setPos2.value, degOf(curPositions, 2));
     const goalVal = num(els.setGoal.value, curGoalType === 'steps' ? curGoalSteps : curGoalKm);
-    curWeight = weightKg; curHeight = heightCm; curBirthdate = birthdate; // curSex/curMaxHrAuto via toggles
-    if (!curMaxHrAuto) curMaxHr = num(els.setMaxHr.value, curMaxHr); // only store manual edits
+    curWeight = weightKg; curHeight = heightCm; curBirthdate = birthdate; // curSex via dropdown
+    curMaxHr = num(els.setMaxHr.value, 0); // empty → 0 → auto from age
     if (curGoalType === 'steps') curGoalSteps = goalVal; else curGoalKm = goalVal;
     curPositions = [{ id: 1, label: 'Position 1', degrees: pos1Deg }, { id: 2, label: 'Position 2', degrees: pos2Deg }];
     els.inclineDropdown.setItems(inclineItems());
     els.inclineDropdown.setValue(String(positionId), { silent: true });
     if (session) { session.weightKg = curWeight; session.age = curAge(); session.sex = curSex; session.strideM = strideFromHeight(curHeight) || 0.71; session.maxHr = effMaxHr(); session.positions = curPositions; }
-    onSettings({ weightKg, heightCm, birthdate, sex: curSex, maxHr: curMaxHr, maxHrAuto: curMaxHrAuto ? 1 : 0, pos1Deg, pos2Deg, goalKm: curGoalKm, goalSteps: curGoalSteps, goalType: curGoalType });
+    onSettings({ weightKg, heightCm, birthdate, sex: curSex, maxHr: curMaxHr, pos1Deg, pos2Deg, goalKm: curGoalKm, goalSteps: curGoalSteps, goalType: curGoalType });
     renderToday();
     goBack();
   }
@@ -619,7 +611,7 @@ export function mount(doc, deps) {
     return add('input', { className: 'inp', type, value }, row);
   }
 
-  selectProgram(programId); setPosition(positionId); setSex(curSex); setMaxHrAuto(curMaxHrAuto); render();
+  selectProgram(programId); setPosition(positionId); setSex(curSex); setGoalType(curGoalType); render();
 
   return {
     els, connectTreadmill, connectHr, startDemo, startWorkout, stopWorkout, disconnect,

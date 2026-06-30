@@ -44,6 +44,9 @@
       border-radius:14px; box-shadow:0 14px 40px rgba(0,0,0,.55); max-height:60vh; overflow:auto; }
     .item { font:inherit; font-size:.92rem; text-align:left; padding:11px 14px; border:0; border-radius:10px; background:transparent; color:var(--fg); cursor:pointer; }
     .item:hover { background:rgba(255,106,43,.18); }
+    /* compact dropdown when used as a right-aligned field control (genre, objectif) */
+    .field .picker { flex:0 0 auto; }
+    .field .drop { min-width:130px; padding:10px 30px 10px 12px; font-size:.9rem; }
 
     .incline-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }
     .incline-label { color:var(--muted); font-size:.85rem; }
