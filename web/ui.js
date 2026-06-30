@@ -29,7 +29,7 @@ export function mount(doc, deps) {
   const {
     treadmill, h10, makeSession = (o) => new WorkoutSession(o), makeSimulator,
     notifier = { notify() {}, buzz() {} }, storage,
-    weightKg: initWeight = 75, maxHr: initMaxHr = 190, positions: initPositions = DEFAULT_POSITIONS,
+    weightKg: initWeight = 75, vestKg: initVest = 0, maxHr: initMaxHr = 190, positions: initPositions = DEFAULT_POSITIONS,
     defaultProgramId = 'free', defaultPositionId = 1,
     loadHistory = () => [], summarizeHistory = () => ({ total: 0, days: 0 }), deleteSession = () => {},
     saveScreen = () => {}, lastScreen = null,
@@ -40,7 +40,7 @@ export function mount(doc, deps) {
   } = deps;
 
   // Mutable settings (editable in the Réglages screen, applied to the next workout).
-  let curWeight = initWeight, curMaxHr = initMaxHr, curPositions = initPositions, curGoalKm = goalKm;
+  let curWeight = initWeight, curVest = initVest, curMaxHr = initMaxHr, curPositions = initPositions, curGoalKm = goalKm;
 
   ensureSeeded({ storage }); // seed starter workouts as editable entries on first run
 
@@ -85,6 +85,7 @@ export function mount(doc, deps) {
   els.settings = add('div', { id: 'settings', className: 'builder', hidden: true });
   add('div', { className: 'sum-title', textContent: 'Réglages' }, els.settings);
   els.setWeight = labeledInput(els.settings, 'Poids (kg)', curWeight);
+  els.setVest = labeledInput(els.settings, 'Gilet lesté (kg, 0 = aucun)', curVest);
   els.setMaxHr = labeledInput(els.settings, 'FC max (bpm)', curMaxHr);
   els.setPos1 = labeledInput(els.settings, 'Angle Position 1 (°)', degOf(curPositions, 1));
   els.setPos2 = labeledInput(els.settings, 'Angle Position 2 (°)', degOf(curPositions, 2));
@@ -263,7 +264,7 @@ export function mount(doc, deps) {
   // --- workout lifecycle -------------------------------------------------------------------
   function startWorkout() {
     const w = getWorkout(programId, { storage });
-    session = makeSession({ weightKg: curWeight, positionId, positions: curPositions, maxHr: curMaxHr, program: w.segments ? w : null });
+    session = makeSession({ weightKg: curWeight, vestKg: curVest, positionId, positions: curPositions, maxHr: curMaxHr, program: w.segments ? w : null });
     lastTargetSpeed = null; state = 'active';
     if (isDemo && sim) sim.start();
     if (controllable) treadmill.start && treadmill.start().catch(() => {});
@@ -417,6 +418,7 @@ export function mount(doc, deps) {
   function openSettings() {
     prevState = state === 'settings' ? prevState : state;
     els.setWeight.value = curWeight;
+    els.setVest.value = curVest;
     els.setMaxHr.value = curMaxHr;
     els.setPos1.value = degOf(curPositions, 1);
     els.setPos2.value = degOf(curPositions, 2);
@@ -424,15 +426,16 @@ export function mount(doc, deps) {
   }
   function applySettings() {
     const weightKg = num(els.setWeight.value, curWeight);
+    const vestKg = Math.max(0, num(els.setVest.value, curVest));
     const maxHr = num(els.setMaxHr.value, curMaxHr);
     const pos1Deg = num(els.setPos1.value, degOf(curPositions, 1));
     const pos2Deg = num(els.setPos2.value, degOf(curPositions, 2));
     const goalKmV = num(els.setGoal.value, curGoalKm);
-    curWeight = weightKg; curMaxHr = maxHr; curGoalKm = goalKmV;
+    curWeight = weightKg; curVest = vestKg; curMaxHr = maxHr; curGoalKm = goalKmV;
     curPositions = [{ id: 1, label: 'Position 1', degrees: pos1Deg }, { id: 2, label: 'Position 2', degrees: pos2Deg }];
     buildPositionButtons();
-    if (session) { session.weightKg = curWeight; session.maxHr = curMaxHr; session.positions = curPositions; }
-    onSettings({ weightKg, maxHr, pos1Deg, pos2Deg, goalKm: goalKmV });
+    if (session) { session.weightKg = curWeight; session.vestKg = curVest; session.maxHr = curMaxHr; session.positions = curPositions; }
+    onSettings({ weightKg, vestKg, maxHr, pos1Deg, pos2Deg, goalKm: goalKmV });
     renderToday();
     goBack();
   }

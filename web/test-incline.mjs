@@ -43,4 +43,13 @@ ok('HM1 positions are 1°/4° (from manual), grade derived via tan()');
 assert.ok(mets(5, 0) > 1);
 ok('METs computed (premium analytics, free here)');
 
+// Weighted vest adds to the mass moved → more calories, scaling ~ (body+vest)/body.
+const noVest = kcalPerMin(5, 3, 80);
+const vest12 = kcalPerMin(5, 3, 80, 12); // 12 kg vest on 80 kg ≈ +15%
+assert.ok(vest12 > noVest, 'vest increases calorie burn');
+assert.ok(Math.abs(vest12 / noVest - (80 + 12) / 80) < 1e-9, 'vest scales kcal by (body+vest)/body');
+assert.ok(Math.abs(kcalPerMin(5, 3, 80, 0) - noVest) < 1e-9, 'vest=0 is unchanged (backward compatible)');
+assert.ok(kcalBurned(5, 3, 80, 10, 12) > kcalBurned(5, 3, 80, 10), 'kcalBurned honours the vest');
+ok('weighted vest scales calories by added load (ACE-validated lever)');
+
 console.log(`incline: ${n} checks passed`);

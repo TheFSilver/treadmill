@@ -36,6 +36,17 @@ function fakeStorage() { const m = {}; return { getItem: (k) => (k in m ? m[k] :
   ok('coerces numeric strings, ignores empty/junk');
 }
 
+// Vest load (numeric) + meal times (string) persist; mealTimes is kept as a trimmed string.
+{
+  const storage = fakeStorage();
+  const m = saveSettings({ vestKg: '12', postMealNudge: 1, mealTimes: ' 12:30,19:30 ' }, { storage });
+  assert.equal(m.vestKg, 12, 'vest "12" → 12');
+  assert.equal(m.postMealNudge, 1);
+  assert.equal(m.mealTimes, '12:30,19:30', 'mealTimes kept as trimmed string');
+  assert.equal(loadSettings({ storage }).mealTimes, '12:30,19:30', 'string setting persisted');
+  ok('vest load + meal-time settings persist (string keys preserved)');
+}
+
 // positionsFromSettings reflects the angles.
 {
   const pos = positionsFromSettings({ pos1Deg: 2, pos2Deg: 6 });

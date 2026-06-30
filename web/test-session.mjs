@@ -16,6 +16,15 @@ let n = 0; const ok = (m) => { n++; console.log('  ✓', m); };
   ok('calories reflect grade + weight (the FitShow dead-angle)');
 }
 
+// A weighted vest increases the session's calories (same speed/grade/time).
+{
+  const noVest = new WorkoutSession({ weightKg: 80, positionId: 2, positions: [{ id: 2, grade: 7 }] });
+  const vest = new WorkoutSession({ weightKg: 80, vestKg: 12, positionId: 2, positions: [{ id: 2, grade: 7 }] });
+  for (let t = 0; t < 600; t++) { noVest.update({ speed: 5 }); vest.update({ speed: 5 }); }
+  assert.ok(vest.calories > noVest.calories, `vest kcal (${vest.calories|0}) > no-vest (${noVest.calories|0})`);
+  ok('weighted vest raises session calories');
+}
+
 // Grade-adjusted distance exceeds raw distance on an incline.
 {
   const s = new WorkoutSession({ positionId: 2 }); // default pos2 = 6%

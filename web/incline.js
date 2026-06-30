@@ -27,14 +27,16 @@ export function vo2Walking(speedKmh, gradePct) {
   return 0.1 * vMetersPerMin + 1.8 * vMetersPerMin * grade + 3.5;
 }
 
-// kcal/min = VO2(ml/kg/min) * weight(kg) / 1000 * 5  (5 kcal per L O2).
-export function kcalPerMin(speedKmh, gradePct, weightKg) {
-  return (vo2Walking(speedKmh, gradePct) * weightKg) / 1000 * 5;
+// kcal/min = VO2(ml/kg/min) * mass(kg) / 1000 * 5  (5 kcal per L O2). A weighted vest adds to
+// the mass MOVED, so cost scales with (body + vest) — the validated "~+12% kcal at ~15% body-
+// weight vest" lever from the walking-fat-loss science. vestKg defaults to 0 (no vest).
+export function kcalPerMin(speedKmh, gradePct, weightKg, vestKg = 0) {
+  return (vo2Walking(speedKmh, gradePct) * (weightKg + (vestKg || 0))) / 1000 * 5;
 }
 
 // Total kcal over a duration at constant speed/grade (the per-tick building block).
-export function kcalBurned(speedKmh, gradePct, weightKg, minutes) {
-  return kcalPerMin(speedKmh, gradePct, weightKg) * minutes;
+export function kcalBurned(speedKmh, gradePct, weightKg, minutes, vestKg = 0) {
+  return kcalPerMin(speedKmh, gradePct, weightKg, vestKg) * minutes;
 }
 
 // Grade-adjusted pace: the flat-ground speed that costs the same VO2 — so a slow incline

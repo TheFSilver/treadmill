@@ -2,7 +2,8 @@
 // storage-injected → testable in Node, persisted in localStorage in the app. Weight feeds the
 // calorie math (fittrack synergy); the angles calibrate the FitShow dead-angle.
 
-export const DEFAULTS = { weightKg: 80, maxHr: 190, strideM: 0.71, pos1Deg: 1, pos2Deg: 4, goalKm: 3 };
+export const DEFAULTS = { weightKg: 80, vestKg: 0, maxHr: 190, strideM: 0.71, pos1Deg: 1, pos2Deg: 4, goalKm: 3, postMealNudge: 0, mealTimes: '12:30,19:30' };
+const STRING_KEYS = ['mealTimes']; // non-numeric settings
 const KEY = 'treadmill.settings';
 const mem = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; })();
 function store(s) { return s || (typeof localStorage !== 'undefined' ? localStorage : mem); }
@@ -28,11 +29,12 @@ export function positionsFromSettings(s) {
   ];
 }
 
-// Keep only known numeric keys, coerced to finite numbers (ignore junk/empty inputs).
+// Keep only known keys: numeric coerced to finite numbers, string keys trimmed (ignore junk).
 function sanitize(p = {}) {
   const out = {};
   for (const k of Object.keys(DEFAULTS)) {
     if (p[k] === undefined || p[k] === null || p[k] === '') continue;
+    if (STRING_KEYS.includes(k)) { out[k] = String(p[k]).trim(); continue; }
     const n = Number(p[k]);
     if (Number.isFinite(n)) out[k] = n;
   }

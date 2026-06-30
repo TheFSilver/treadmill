@@ -40,8 +40,9 @@ export function programDurationSec(program) {
 }
 
 export class WorkoutSession {
-  constructor({ weightKg = 75, positionId = 1, positions, maxHr = 190, program = null, strideM = 0.71 } = {}) {
+  constructor({ weightKg = 75, vestKg = 0, positionId = 1, positions, maxHr = 190, program = null, strideM = 0.71 } = {}) {
     this.weightKg = weightKg;
+    this.vestKg = vestKg;        // weighted-vest load (kg) → folded into the calorie math
     this.positionId = positionId;
     this.positions = positions;
     this.maxHr = maxHr;
@@ -75,8 +76,8 @@ export class WorkoutSession {
     this.gaDistanceM += (gradeAdjustedSpeed(speed, this.grade) * 1000 / 3600) * dtSec;
     this.steps += deltaM / this.strideM; // step estimate from belt distance / stride length
 
-    // Calories OUR way: grade + weight (ignore the treadmill's flat figure).
-    this.calories += kcalPerMin(speed, this.grade, this.weightKg) * (dtSec / 60);
+    // Calories OUR way: grade + weight + optional vest (ignore the treadmill's flat figure).
+    this.calories += kcalPerMin(speed, this.grade, this.weightKg, this.vestKg) * (dtSec / 60);
 
     if (hr) {
       this.peakHr = Math.max(this.peakHr, hr);

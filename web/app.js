@@ -11,6 +11,7 @@ import { createNotifier } from './notify.js';
 import { recordSession, loadStreak, streakText, loadSessions, deleteSession, todayStr, loadPref, savePref } from './streak.js';
 import { summary as summarizeHistory, todayTotals } from './trend.js';
 import { loadSettings, saveSettings, positionsFromSettings } from './settings.js';
+import { parseMealTimes, nudgeDue } from './postmeal.js';
 import { createWakeLock } from './wakelock.js';
 
 const notifier = createNotifier();
@@ -25,6 +26,7 @@ const app = mount(document, {
   makeSimulator: makeTreadmillSimulator,
   notifier,
   weightKg: settings.weightKg,
+  vestKg: settings.vestKg,
   maxHr: settings.maxHr,
   positions: positionsFromSettings(settings),
   defaultProgramId: loadPref('program', 'free'),
@@ -52,6 +54,22 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { type: 'module' }).then(() => {
     document.addEventListener('click', () => notifier.requestPermission(), { once: true });
   }).catch(() => {});
+}
+
+// Post-meal walk nudge — the one solid lever from the walking-fat-loss science (glucose-blunting).
+// Opt-in (settings.postMealNudge); checks each minute against the user's meal times, once per meal.
+if (settings.postMealNudge) {
+  const meals = parseMealTimes(settings.mealTimes);
+  const checkNudge = () => {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const today = todayStr();
+    const last = loadPref('postMealNudge.last', null);
+    const lastMin = last && last.date === today ? last.min : null;
+    const r = nudgeDue(nowMin, meals, lastMin);
+    if (r.due) { notifier.notify('Marche post-repas', { body: r.message, vibration: [60] }); savePref('postMealNudge.last', { date: today, min: nowMin }); }
+  };
+  setInterval(checkNudge, 60000); checkNudge();
 }
 
 // After a refresh the BLE link is gone (Web Bluetooth limitation), but if the treadmill was

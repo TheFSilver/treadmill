@@ -191,13 +191,13 @@ const deps = (over = {}) => ({
   // open settings from idle
   api.els.settingsBtn.click();
   assert.equal(api.state, 'settings');
-  api.els.setWeight.value = '100'; api.els.setMaxHr.value = '180';
+  api.els.setWeight.value = '100'; api.els.setVest.value = '10'; api.els.setMaxHr.value = '180';
   api.els.setPos1.value = '2'; api.els.setPos2.value = '8';
   api.els.saveSettings.click();
   assert.equal(api.state, 'idle', 'Back to where we came from after saving');
   assert.equal(api.weightKg, 100, 'weight applied');
   assert.equal(api.positions[1].degrees, 8, 'incline angle applied');
-  assert.deepEqual(saved, { weightKg: 100, maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3 }, 'persisted via onSettings');
+  assert.deepEqual(saved, { weightKg: 100, vestKg: 10, maxHr: 180, pos1Deg: 2, pos2Deg: 8, goalKm: 3 }, 'persisted via onSettings (incl. vest)');
   // heavier weight → more calories in a demo run
   api.els.demoBtn.click(); api.els.startBtn.click(); sched.run(60);
   const kcalHeavy = Number(api.els.mKcal.textContent.replace(/\D/g, ''));
