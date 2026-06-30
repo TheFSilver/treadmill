@@ -67,7 +67,7 @@ export function mount(doc, deps) {
   // Incline selector — chosen BEFORE the run (manual/mechanical, can't change mid-workout).
   // Dropdown showing each position's angle AND grade %. Rebuilt when the angles change.
   els.inclineRow = add('div', { id: 'incline', className: 'incline-row' });
-  add('span', { className: 'incline-label', textContent: 'Inclinaison (fixée pour la séance)' }, els.inclineRow);
+  add('span', { className: 'incline-label', textContent: 'Inclinaison du tapis' }, els.inclineRow);
   els.inclineDropdown = createDropdown(doc, { items: inclineItems(), placeholder: 'Inclinaison', onSelect: (id) => setPosition(Number(id)) });
   els.inclineRow.appendChild(els.inclineDropdown.el);
 
@@ -75,7 +75,7 @@ export function mount(doc, deps) {
   // numeric input 0–40 kg, decimals + comma accepted (e.g. 10,5). Read at start, fed to calories.
   els.vestRow = add('div', { id: 'vest', className: 'incline-row' });
   add('span', { className: 'incline-label', textContent: 'Veste lestée (kg)' }, els.vestRow);
-  els.vestInput = add('input', { id: 'vestInput', className: 'inp', type: 'text', inputMode: 'decimal', placeholder: '0', value: initVest || '' }, els.vestRow);
+  els.vestInput = add('input', { id: 'vestInput', className: 'inp num2', type: 'text', inputMode: 'decimal', maxLength: 4, placeholder: '0', value: initVest || '' }, els.vestRow);
 
   // Workouts management page (create / edit / delete custom workouts).
   els.workouts = add('div', { id: 'workouts', className: 'workouts', hidden: true });
@@ -218,7 +218,7 @@ export function mount(doc, deps) {
   function inclineItems() { return curPositions.map((p) => ({ id: String(p.id), label: `${p.label} — ${p.degrees}° (${pctStr(p.degrees)})` })); }
   function pctStr(deg) { return gradeFromDegrees(deg).toFixed(1).replace('.', ',') + ' %'; }
   // Per-session weighted vest: read the free numeric field (0–40 kg, comma OK) at start; persist.
-  function readVest() { curVest = clamp(parseDec(els.vestInput.value), 0, 40); onVest(curVest); return curVest; }
+  function readVest() { curVest = clamp(parseDec(els.vestInput.value), 0, 50); onVest(curVest); return curVest; }
   function setSex(s) { curSex = s === 'F' ? 'F' : 'M'; els.sexMBtn.className = curSex === 'M' ? 'pos on' : 'pos'; els.sexFBtn.className = curSex === 'F' ? 'pos on' : 'pos'; }
   function curAge() { return ageFromBirthdate(curBirthdate, now()); }
   // Daily-goal unit toggle (km / pas): swap the value field to the chosen unit's stored value.
