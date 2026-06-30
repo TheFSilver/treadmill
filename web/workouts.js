@@ -22,19 +22,33 @@ export const SEED_WORKOUTS = [
   // are brisk defaults (cap 8 km/h on the HM1) ; with the H10, target the HR zones instead.
   { id: 'japanese', name: 'Japanese Walking (IWT)', segments: [
     ...Array.from({ length: 5 }, () => [{ minutes: 3, speed: 7.5, kind: 'effort' }, { minutes: 3, speed: 3.5, kind: 'recovery' }]).flat() ] },
+  // Post-meal walk: 12 min steady gentle pace (glucose-blunting lever). Keep Position 2 incline on
+  // and the vest light/off — it's a digestion walk, not a training block.
+  { id: 'postmeal', name: 'Post-repas 12 min', segments: [{ minutes: 12, speed: 4, kind: 'effort' }] },
 ];
 
 const KEY = 'treadmill.custom';
 const SEED_FLAG = 'treadmill.seeded';
+// The original seed set — used to migrate the legacy boolean flag so NEW seeds still propagate
+// to users who were already seeded, while honouring any seed they later deleted.
+const LEGACY_SEEDED = ['deskwalk', 'fatburn', 'intervals', 'japanese'];
 
-// Seed the starter workouts as editable custom entries, once. Idempotent.
+// Seed starter workouts as editable custom entries. ADDITIVE + idempotent: a brand-new seed is
+// added once even to already-seeded installs; a seed the user deleted never comes back (its id
+// stays recorded). SEED_FLAG holds the JSON list of seed ids already introduced.
 export function ensureSeeded({ storage } = {}) {
   const s = store(storage);
-  if (s.getItem(SEED_FLAG)) return;
+  const raw = readJSON(s, SEED_FLAG, null);
+  const seededIds = Array.isArray(raw) ? raw : (raw ? LEGACY_SEEDED.slice() : []);
   const list = readJSON(s, KEY, []);
-  for (const w of SEED_WORKOUTS) if (!list.some((x) => x.id === w.id)) list.push({ ...w, custom: true });
-  s.setItem(KEY, JSON.stringify(list));
-  s.setItem(SEED_FLAG, '1');
+  let changed = false;
+  for (const w of SEED_WORKOUTS) {
+    if (seededIds.includes(w.id)) continue;                  // already introduced (even if deleted since)
+    if (!list.some((x) => x.id === w.id)) { list.push({ ...w, custom: true }); changed = true; }
+    seededIds.push(w.id);
+  }
+  if (changed) s.setItem(KEY, JSON.stringify(list));
+  s.setItem(SEED_FLAG, JSON.stringify(seededIds));
 }
 const mem = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; } }; })();
 function store(s) { return s || (typeof localStorage !== 'undefined' ? localStorage : mem); }

@@ -30,6 +30,37 @@ function fakeStorage() { const m = {}; return { getItem: (k) => (k in m ? m[k] :
   ok('ensureSeeded seeds starters as editable customs, once');
 }
 
+// Post-repas: a short, gentle, single-segment steady walk (the glucose-blunting lever).
+{
+  const pm = SEED_WORKOUTS.find((w) => w.id === 'postmeal');
+  assert.ok(pm, 'Post-repas present in seeds');
+  assert.equal(pm.segments.length, 1, 'single steady segment');
+  assert.equal(pm.segments[0].minutes, 12, '12 min');
+  assert.ok(pm.segments[0].speed <= 4.5, 'gentle pace (digestion, not training)');
+  ok('Post-repas is a 12-min steady gentle walk');
+}
+
+// Additive seeding: a user already seeded under the LEGACY boolean flag still gets a NEW seed.
+{
+  const storage = fakeStorage();
+  storage.setItem('treadmill.custom', JSON.stringify(
+    ['deskwalk', 'fatburn', 'intervals', 'japanese'].map((id) => ({ id, name: id, segments: [], custom: true }))));
+  storage.setItem('treadmill.seeded', '1'); // legacy flag = the original 4 were seeded
+  ensureSeeded({ storage });
+  assert.ok(loadCustom({ storage }).some((w) => w.id === 'postmeal'), 'new seed propagates to already-seeded users');
+  ok('new seeds reach already-seeded installs (legacy flag migrated)');
+}
+
+// A seed the user DELETED must not come back on the next ensureSeeded.
+{
+  const storage = fakeStorage();
+  ensureSeeded({ storage });
+  deleteCustom('postmeal', { storage });
+  ensureSeeded({ storage });
+  assert.ok(!loadCustom({ storage }).some((w) => w.id === 'postmeal'), 'deleted seed stays gone');
+  ok('a deleted seed does not reappear');
+}
+
 // Custom workout: create → appears in allWorkouts + fetchable + persisted.
 {
   const storage = fakeStorage();
