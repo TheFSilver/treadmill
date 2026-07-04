@@ -163,6 +163,18 @@
     .lock-unlock.holding { border-color:var(--sig-marche,#4fe0a0); color:var(--cad-text,#eaf1f7); }
     .lock-unlock.holding::after { content:''; position:absolute; left:0; top:0; bottom:0; width:0; background:color-mix(in oklab, var(--sig-marche,#4fe0a0) 30%, transparent); animation:lockfill 1.5s linear forwards; }
     @keyframes lockfill { to { width:100%; } }
+    /* Intervalles minutés extérieur : config + bannière de phase */
+    .gps-int { width:100%; max-width:440px; display:flex; flex-direction:column; gap:10px; }
+    .int-seg { display:flex; gap:6px; }
+    .int-cfg { display:flex; flex-direction:column; gap:8px; }
+    .int-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .int-lab { color:var(--cad-text-3,#7d8fa0); font-size:14px; }
+    .int-inp { width:90px; text-align:center; }
+    .int-sum { color:var(--cad-text-3,#7d8fa0); font-size:14px; }
+    .int-phase { width:100%; max-width:440px; text-align:center; font:700 24px var(--font-data,monospace); letter-spacing:.04em; padding:12px; border-radius:14px; font-variant-numeric:tabular-nums; }
+    .int-phase.run { color:#080b10; background:var(--sig-marche,#4fe0a0); }
+    .int-phase.rest { color:#080b10; background:var(--sig-corps,#f0c061); }
+    .int-phase.done { color:var(--cad-text,#eaf1f7); background:var(--cad-surface-2,#121822); }
 
     .controls { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:auto; }
     .btn { font:inherit; font-size:.95rem; padding:13px 20px; border:0; border-radius:14px; color:var(--fg); background:var(--card); border:1px solid var(--line); cursor:pointer; }
