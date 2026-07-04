@@ -153,6 +153,16 @@
     .quickrow { display:flex; gap:6px; justify-content:center; width:100%; max-width:440px; }
     .btn.danger { background:color-mix(in oklab, #ff6f8e 15%, var(--card)); border-color:color-mix(in oklab, #ff6f8e 42%, transparent); color:#ff6f8e; font-weight:600; }
     .stop-full { width:100%; max-width:440px; }
+    /* Verrouillage écran (course) : overlay plein écran qui bloque les touchers ; appui long pour déverrouiller */
+    .lock-overlay { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:rgba(6,7,12,.94); backdrop-filter:blur(6px); }
+    .lock-overlay[hidden] { display:none; }
+    .lock-ic { font-size:56px; opacity:.85; }
+    .lock-stat { font:600 22px var(--font-data,monospace); color:var(--cad-text,#eaf1f7); font-variant-numeric:tabular-nums; }
+    .lock-hint { color:var(--cad-text-3,#7d8fa0); font-size:14px; }
+    .lock-unlock { margin-top:8px; padding:16px 26px; border-radius:999px; border:2px solid var(--cad-hairline-2,rgba(255,255,255,.12)); background:var(--cad-surface-2,#121822); color:var(--cad-text-2,#9fb0c0); font:600 15px var(--font-ui,sans-serif); position:relative; overflow:hidden; touch-action:none; user-select:none; }
+    .lock-unlock.holding { border-color:var(--sig-marche,#4fe0a0); color:var(--cad-text,#eaf1f7); }
+    .lock-unlock.holding::after { content:''; position:absolute; left:0; top:0; bottom:0; width:0; background:color-mix(in oklab, var(--sig-marche,#4fe0a0) 30%, transparent); animation:lockfill 1.5s linear forwards; }
+    @keyframes lockfill { to { width:100%; } }
 
     .controls { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:auto; }
     .btn { font:inherit; font-size:.95rem; padding:13px 20px; border:0; border-radius:14px; color:var(--fg); background:var(--card); border:1px solid var(--line); cursor:pointer; }
